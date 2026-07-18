@@ -22,6 +22,7 @@ export class StatusBarManager implements vscode.Disposable {
     this.statusBar.command = state.command;
     this.statusBar.color = state.color;
   }
+  
 
   public show(): void {
     this.statusBar.show();
