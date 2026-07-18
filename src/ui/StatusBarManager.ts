@@ -1,21 +1,33 @@
 import * as vscode from "vscode";
+import { StatusBarState } from "../models/StatusBarState";
 
-export class StatusBarManager {
-  private statusBarItem: vscode.StatusBarItem;
+export class StatusBarManager implements vscode.Disposable {
+  private statusBar: vscode.StatusBarItem;
 
   constructor() {
-    this.statusBarItem = vscode.window.createStatusBarItem(
+    this.statusBar = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,
       100
     );
 
-    this.statusBarItem.text = "$(rocket) Discode";
-    this.statusBarItem.tooltip = "My extension";
-    this.statusBarItem.command = "extension.showHelloWorld";
-    this.statusBarItem.show();
+    this.statusBar.text = "$(rocket) Discode";
+    this.statusBar.tooltip = "My extension";
+    this.statusBar.command = "extension.showHelloWorld";
+    this.statusBar.show();
+  }
+
+  public update(state: StatusBarState): void {
+    this.statusBar.text = state.text;
+    this.statusBar.tooltip = state.tooltip;
+    this.statusBar.command = state.command;
+    this.statusBar.color = state.color;
+  }
+
+  public show(): void {
+    this.statusBar.show();
   }
 
   public dispose(): void {
-    this.statusBarItem.dispose();
+    this.statusBar.dispose();
   }
 }
