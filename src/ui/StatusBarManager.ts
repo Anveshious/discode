@@ -11,8 +11,8 @@ export class StatusBarManager implements vscode.Disposable {
     );
 
     this.statusBar.text = "$(rocket) Discode";
-    this.statusBar.tooltip = "My extension";
-    this.statusBar.command = "extension.showHelloWorld";
+    // this.statusBar.tooltip = "Discode";
+    // this.statusBar.command = "discode.helloWorld";
     this.statusBar.show();
   }
 
@@ -22,7 +22,6 @@ export class StatusBarManager implements vscode.Disposable {
     this.statusBar.command = state.command;
     this.statusBar.color = state.color;
   }
-  
 
   public show(): void {
     this.statusBar.show();

@@ -1,9 +1,14 @@
 import * as vscode from "vscode";
+import { StatusBarManager } from "../ui/StatusBarManager";
 
-export class ExtensionController {
+export class ExtensionController implements vscode.Disposable {
+    private statusBar: StatusBarManager;
+
     constructor() {
-        vscode.window.showInformationMessage(
-            "Extension Controller initialized 🚀"
-        );
+        this.statusBar = new StatusBarManager();
+    }
+
+    dispose() {
+        this.statusBar.dispose();
     }
 }
