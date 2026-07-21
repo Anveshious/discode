@@ -17,6 +17,10 @@
       {
         "command": "discode.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "discode.openDashboard",
+        "title": "Open Discode Dashboard"
       }
     ]
   },
