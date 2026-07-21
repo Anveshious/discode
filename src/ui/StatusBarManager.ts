@@ -10,7 +10,7 @@ export class StatusBarManager implements vscode.Disposable {
       100
     );
 
-    this.statusBar.text = "$(rocket) Discode";
+    this.statusBar.text = "$(radio-tower) Discode";
     // this.statusBar.tooltip = "Discode";
     // this.statusBar.command = "discode.helloWorld";
     this.statusBar.show();
