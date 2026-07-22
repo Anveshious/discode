@@ -3,38 +3,26 @@ import * as vscode from "vscode";
 export class AuthManager {
     private session?: vscode.AuthenticationSession;
 
-    public async handleMessage(message: any): Promise<void> {
-        switch (message.type) {
-            case "auth.login":
-                await this.login();
-                break;
-            case "auth.logout":
-                await this.logout();
-                break;
-        }
-    }
-
-    private async login(): Promise<vscode.AuthenticationSession> {
+    public async login(): Promise<vscode.AuthenticationSession> {
+        
         try {
-            this.session = await vscode.authentication.getSession("github", ["user:email"], {
-                createIfNone: true,
-            });
-            vscode.window.showInformationMessage("Successfully logged in with GitHub!");
-            return this.session;
+            // this.session = await vscode.authentication.getSession("github", [], {
+            //     createIfNone: true,
+            // });
+            const session = await vscode.authentication.getSession("github",[],{createIfNone: true});
+            //vscode.window.showInformationMessage("Successfully logged in with GitHub!");
+            vscode.window.showInformationMessage(
+                `Welcome ${session.account.label}!`
+            );
+            return session;
         } catch (error) {
             vscode.window.showErrorMessage("Failed to login with GitHub");
             throw error;
         }
     }
 
-    private async logout(): Promise<void> {
-        if (this.session) {
-            await vscode.authentication.getSession("github", ["user:email"], {
-                createIfNone: false,
-            });
-            this.session = undefined;
-            vscode.window.showInformationMessage("Logged out successfully");
-        }
+    public logout() {
+        this.session = undefined;
     }
 
     public getSession(): vscode.AuthenticationSession | undefined {
