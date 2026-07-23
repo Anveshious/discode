@@ -1,9 +1,12 @@
 import * as vscode from "vscode";
+import { AuthManager } from "../auth/AuthManager";
 
 export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
 
-    public show(): void {
+    constructor(private authManager: AuthManager) {}//Dependency injection
+
+    public async show(): Promise<void> {
         if (this.panel) {
             this.panel.reveal(vscode.ViewColumn.One);
             return;
@@ -20,10 +23,11 @@ export class OpenDashboard {
 
         this.panel.webview.html = this.getHtmlContent();
 
-        this.panel.webview.onDidReceiveMessage((message) => {
+        this.panel.webview.onDidReceiveMessage(async(message) => {
             switch (message.type) {
                 case "auth.login":
-                    vscode.window.showInformationMessage("GitHub Login Clicked!");
+                    // vscode.window.showInformationMessage("GitHub Login Clicked!");
+                    await this.authManager.login();
                     break;
             }
         });
@@ -41,17 +45,26 @@ export class OpenDashboard {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Discode Dashboard</title>
     <style>
-        /* CSS Styling */
+        /* Professional VS Code Extension Theming */
         :root {
-            --bg-color: #0d1117;
-            --card-bg: #161b22;
-            --border-color: #30363d;
-            --text-main: #c9d1d9;
-            --text-muted: #8b949e;
-            --btn-bg: #238636;
-            --btn-hover: #2ea043;
+            /* Uses native VS Code theme variables, falls back to GitHub Dark if opened in a browser */
+            --bg-color: var(--vscode-editor-background, #0d1117);
+            --card-bg: var(--vscode-sideBar-background, #161b22);
+            --border-color: var(--vscode-widget-border, #30363d);
+            --text-main: var(--vscode-editor-foreground, #c9d1d9);
+            --text-muted: var(--vscode-descriptionForeground, #8b949e);
+            --btn-bg: var(--vscode-button-background, #238636);
+            --btn-fg: var(--vscode-button-foreground, #ffffff);
+            --btn-hover: var(--vscode-button-hoverBackground, #2ea043);
+            --btn-secondary: var(--vscode-button-secondaryBackground, #21262d);
+            --btn-secondary-fg: var(--vscode-button-secondaryForeground, #c9d1d9);
+            --btn-secondary-hover: var(--vscode-button-secondaryHoverBackground, #30363d);
             --offline-color: #8b949e;
             --online-color: #3fb950;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
@@ -60,44 +73,82 @@ export class OpenDashboard {
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             background-color: var(--bg-color);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
             color: var(--text-main);
+        }
+
+        .dashboard-container {
+            width: 100%;
+            max-width: 360px;
+            padding: 20px;
         }
 
         .dashboard-card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 2.5rem 2rem;
-            width: 100%;
-            max-width: 340px;
             text-align: center;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header {
+            margin-bottom: 2rem;
         }
 
         .header h1 {
             margin: 0;
-            font-size: 1.8rem;
+            font-size: 1.75rem;
             font-weight: 700;
             letter-spacing: 0.5px;
-            color: #ffffff;
+            color: var(--text-main);
         }
 
         .header p {
             color: var(--text-muted);
-            font-size: 0.95rem;
-            margin-top: 10px;
-            margin-bottom: 2.5rem;
+            font-size: 0.9rem;
+            margin-top: 8px;
+            line-height: 1.4;
         }
 
-        .status-container {
-            background-color: rgba(13, 17, 23, 0.5);
+        /* Profile Section */
+        .profile-card {
+            background-color: rgba(0, 0, 0, 0.15);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: 6px;
             padding: 1rem 1.2rem;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .profile-label {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .profile-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        /* Status & Stats Section */
+        .status-container {
+            background-color: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 1rem 1.2rem;
+            margin-bottom: 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -105,7 +156,7 @@ export class OpenDashboard {
 
         .status-label {
             color: var(--text-muted);
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 1px;
             font-weight: 600;
@@ -116,12 +167,12 @@ export class OpenDashboard {
             align-items: center;
             gap: 8px;
             font-weight: 500;
-            font-size: 1rem;
+            font-size: 0.95rem;
         }
 
         .dot {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             display: inline-block;
             background-color: var(--offline-color);
@@ -130,95 +181,192 @@ export class OpenDashboard {
 
         .dot.online {
             background-color: var(--online-color);
-            box-shadow: 0 0 10px rgba(63, 185, 80, 0.4);
+            box-shadow: 0 0 10px rgba(63, 185, 80, 0.5);
         }
 
-        .github-btn {
-            background-color: var(--btn-bg);
-            color: #ffffff;
-            border: 1px solid rgba(240, 246, 252, 0.1);
-            padding: 0.8rem 1.5rem;
-            border-radius: 6px;
-            font-size: 1rem;
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 0.5rem;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .stats-container span {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        /* Buttons */
+        .btn {
+            border: 1px solid transparent;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            font-size: 0.95rem;
             font-weight: 600;
             cursor: pointer;
             width: 100%;
-            transition: background-color 0.2s, border-color 0.2s;
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
+            font-family: inherit;
         }
 
-        .github-btn:hover {
+        .btn-primary {
+            background-color: var(--btn-bg);
+            color: var(--btn-fg);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-primary:hover {
             background-color: var(--btn-hover);
         }
 
+        .btn-secondary {
+            background-color: var(--btn-secondary);
+            color: var(--btn-secondary-fg);
+            border-color: var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--btn-secondary-hover);
+        }
+
         .github-icon {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             fill: currentColor;
+        }
+
+        /* Smooth View Transitions */
+        .view-section {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .hidden {
+            display: none !important;
+            opacity: 0;
+            transform: translateY(10px);
         }
     </style>
 </head>
 <body>
-    <div class="dashboard-card">
-        <div class="header">
-            <h1>🚀 DISCODE</h1>
-            <p>Know when your friends are coding.</p>
-        </div>
+    <div class="dashboard-container">
+        <div class="dashboard-card">
 
-        <div class="status-container">
-            <span class="status-label">Status</span>
-            <div class="status-indicator">
-                <span class="dot" id="statusDot"></span>
-                <span id="statusText">Offline</span>
+            <!-- ================= LOGGED OUT VIEW ================= -->
+            <div id="view-logged-out" class="view-section">
+                <div class="header">
+                    <h1>🚀 DISCODE</h1>
+                    <p>Know when your friends are coding.</p>
+                </div>
+
+                <div class="status-container" style="margin-bottom: 2.5rem;">
+                    <span class="status-label">Status</span>
+                    <div class="status-indicator">
+                        <span class="dot" id="statusDot"></span>
+                        <span id="statusText">Offline</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" id="loginBtn" onclick="login()">
+                    <svg class="github-icon" viewBox="0 0 16 16" version="1.1" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                    </svg>
+                    Sign in with GitHub
+                </button>
             </div>
-        </div>
 
-        <button class="github-btn" id="loginBtn" onclick="login()">
-            <!-- Inline GitHub SVG Icon -->
-            <svg class="github-icon" viewBox="0 0 16 16" version="1.1" aria-hidden="true">
-                <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-            </svg>
-            Sign in with GitHub
-        </button>
+            <!-- ================= LOGGED IN VIEW ================= -->
+            <div id="view-logged-in" class="view-section hidden">
+                <div class="header">
+                    <h1>🚀 DISCODE</h1>
+                    <p>👋 Welcome back!</p>
+                </div>
+
+                <div class="profile-card">
+                    <span class="profile-label">GitHub</span>
+                    <span class="profile-name" id="userName">Anne *</span>
+                </div>
+
+                <div class="status-container" style="margin-bottom: 1rem;">
+                    <span class="status-label">Status</span>
+                    <div class="status-indicator">
+                        <span class="dot online"></span>
+                        <span>Online</span>
+                    </div>
+                </div>
+
+                <div class="stats-container">
+                    <span>Friends Online:</span>
+                    <span id="friendsCount">0</span>
+                </div>
+
+                <button class="btn btn-secondary" onclick="logout()">
+                    Sign Out
+                </button>
+            </div>
+
+        </div>
     </div>
 
     <script>
-    //     // JavaScript logic for interactivity
-    //     let isOnline = false;
-        const vscode = acquireVsCodeApi();
+        // Check if running inside VS Code, otherwise fail gracefully so it still works in a standard browser
+        const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 
         function login() {
-            vscode.postMessage({
-                type: "auth.login"
-            });
+            // 1. Send message to extension backend
+            if (vscode) {
+                vscode.postMessage({ type: "auth.login" });
+            }
+            
+            // 2. Immediately update the UI locally so the user sees the change
+            setViewState(true);
         }
 
-    //     function toggleStatus() {
-    //         const statusDot = document.getElementById('statusDot');
-    //         const statusText = document.getElementById('statusText');
-    //         const loginBtn = document.getElementById('loginBtn');
+        function logout() {
+            // 1. Send message to extension backend
+            if (vscode) {
+                vscode.postMessage({ type: "auth.logout" });
+            }
+            
+            // 2. Immediately update the UI locally so the user sees the change
+            setViewState(false);
+        }
 
-    //         isOnline = !isOnline;
+        // Logic to swap the screens
+        function setViewState(isLoggedIn) {
+            const loggedOutView = document.getElementById('view-logged-out');
+            const loggedInView = document.getElementById('view-logged-in');
+            
+            if (isLoggedIn) {
+                loggedOutView.classList.add('hidden');
+                loggedInView.classList.remove('hidden');
+            } else {
+                loggedInView.classList.add('hidden');
+                loggedOutView.classList.remove('hidden');
+            }
+        }
 
-    //         if (isOnline) {
-    //             // Change to Online state
-    //             statusDot.classList.add('online');
-    //             statusText.textContent = 'Online';
-    //             loginBtn.innerHTML = 'Sign Out';
-    //             loginBtn.style.backgroundColor = '#21262d';
-    //             loginBtn.style.color = '#c9d1d9';
-    //         }
-    //         else {
-    //             // Revert to Offline state
-    //             statusDot.classList.remove('online');
-    //             statusText.textContent = 'Offline';
-    //             loginBtn.style.backgroundColor = 'var(--btn-bg)';
-    //             loginBtn.style.color = '#ffffff';
-    //         }
-    //     }
+        // Optional: Listen for backend state changes (e.g., when the extension first loads)
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.type === 'authStateChanged') {
+                setViewState(message.isLoggedIn);
+                
+                if (message.userName) {
+                    document.getElementById('userName').textContent = message.userName;
+                }
+                if (message.friendsOnline !== undefined) {
+                    document.getElementById('friendsCount').textContent = message.friendsOnline;
+                }
+            }
+        });
     </script>
 </body>
 </html>`;
