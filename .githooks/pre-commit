@@ -1,0 +1,4 @@
+#!/bin/sh
+
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+node "$repo_root/scripts/update-changelog.js"

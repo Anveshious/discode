@@ -4,16 +4,20 @@ export class AuthManager {
     private session?: vscode.AuthenticationSession;
 
     public async login(): Promise<vscode.AuthenticationSession> {
-        
         try {
-            // this.session = await vscode.authentication.getSession("github", [], {
-            //     createIfNone: true,
-            // });
-            const session = await vscode.authentication.getSession("github",[],{createIfNone: true});
-            //vscode.window.showInformationMessage("Successfully logged in with GitHub!");
+            const session = await vscode.authentication.getSession(
+                "github",
+                ["user:email"],
+                { createIfNone: true }
+            );
+
+            this.session = session;
             vscode.window.showInformationMessage(
                 `Welcome ${session.account.label}!`
             );
+            
+            console.log(this.session.accessToken);
+
             return session;
         } catch (error) {
             vscode.window.showErrorMessage("Failed to login with GitHub");
@@ -32,4 +36,5 @@ export class AuthManager {
     public isAuthenticated(): boolean {
         return this.session !== undefined;
     }
+    
 }
