@@ -15,8 +15,6 @@ export class AuthManager {
             vscode.window.showInformationMessage(
                 `Welcome ${session.account.label}!`
             );
-            
-            console.log(this.session.accessToken);
 
             return session;
         } catch (error) {

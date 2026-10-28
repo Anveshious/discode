@@ -9,10 +9,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### Added
 
 - GitHub authentication using VS Code's built-in authentication provider.
+- Authenticated GitHub profile retrieval with profile links and follower counts, sent to the dashboard after sign-in.
 - A reusable Discode dashboard opened through a VS Code command.
 - A status bar presence item and command-based extension entry points.
 - A modular extension structure for authentication, commands, dashboard, and status bar features.
 
 ### Changed
 
+- Staged paths: `CHANGELOG.md`, `README.md`, `src/auth/AuthManager.ts`, `src/gitHub/GithubService.ts`, `src/models/GitHubUser.ts`, and 1 more
 - Staged paths: `.githooks/pre-commit`, `CHANGELOG.md`, `package.json`, `scripts/update-changelog.js`, `src/auth/AuthManager.ts`, and 2 more
