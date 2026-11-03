@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `eslint.config.mjs`, `package.json`
 - Staged paths: `src/auth/AuthManager.ts`, `src/commands/CommandManager.ts`, `src/core/ExtensionController.ts`, `src/ui/StatusBarManager.ts`, `src/webview/DashboardView.ts`
 - Staged paths: `src/auth/AuthManager.ts`, `src/commands/CommandManager.ts`, `src/core/ExtensionController.ts`, `src/extension.ts`, `src/ui/StatusBarManager.ts`, and 1 more
 - Staged paths: `CHANGELOG.md`, `README.md`, `src/auth/AuthManager.ts`, `src/gitHub/GithubService.ts`, `src/models/GitHubUser.ts`, and 1 more
