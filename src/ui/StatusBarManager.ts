@@ -12,11 +12,11 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   public show(): void {
-    this.show();
+    this.statusBar.show();
   }
 
   public dispose(): void {
-    this.dispose();
+    this.statusBar.dispose();
   }
 
   constructor() {

@@ -6,9 +6,13 @@ export class ExtensionController implements vscode.Disposable {
     private statusBar: StatusBarManager;
     private commandManager: CommandManager;
 
-    constructor() {
+    constructor(context: vscode.ExtensionContext) {
         this.statusBar = new StatusBarManager();
-        this.commandManager = new CommandManager();
+        this.commandManager = new CommandManager(context);
+    }
+
+    public async initialize(): Promise<void> {
+        await this.commandManager.initialize();
     }
 
     dispose() {
@@ -16,4 +20,3 @@ export class ExtensionController implements vscode.Disposable {
         this.statusBar.dispose();
     }
 }
-

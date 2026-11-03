@@ -1,10 +1,14 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../auth/AuthManager";
+import { GitHubService } from "../services/GitHubService";
 
 export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
+    private readonly githubService: GitHubService;
 
-    constructor(private authManager: AuthManager) {}//Dependency injection
+    constructor(private readonly authManager: AuthManager) {
+        this.githubService = new GitHubService(authManager);
+    }
 
     public async show(): Promise<void> {
         if (this.panel) {
@@ -26,8 +30,21 @@ export class OpenDashboard {
         this.panel.webview.onDidReceiveMessage(async(message) => {
             switch (message.type) {
                 case "auth.login":
-                    // vscode.window.showInformationMessage("GitHub Login Clicked!");
-                    await this.authManager.login();
+                    try {
+                        await this.authManager.login();
+                    } catch {
+                        return;
+                    }
+
+                    try {
+                        const user = await this.githubService.getCurrentUser();
+                        await this.panel?.webview.postMessage({
+                            type: "auth.profile",
+                            user,
+                        });
+                    } catch {
+                        await vscode.window.showErrorMessage("Unable to load your GitHub profile.");
+                    }
                     break;
             }
         });
@@ -320,13 +337,9 @@ export class OpenDashboard {
         const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 
         function login() {
-            // 1. Send message to extension backend
             if (vscode) {
                 vscode.postMessage({ type: "auth.login" });
             }
-            
-            // 2. Immediately update the UI locally so the user sees the change
-            setViewState(true);
         }
 
         function logout() {
@@ -356,15 +369,10 @@ export class OpenDashboard {
         // Optional: Listen for backend state changes (e.g., when the extension first loads)
         window.addEventListener('message', event => {
             const message = event.data;
-            if (message.type === 'authStateChanged') {
-                setViewState(message.isLoggedIn);
-                
-                if (message.userName) {
-                    document.getElementById('userName').textContent = message.userName;
-                }
-                if (message.friendsOnline !== undefined) {
-                    document.getElementById('friendsCount').textContent = message.friendsOnline;
-                }
+            if (message.type === 'auth.profile') {
+                setViewState(true);
+                document.getElementById('userName').textContent =
+                    message.user.name || message.user.login;
             }
         });
     </script>

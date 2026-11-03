@@ -7,8 +7,8 @@ export class CommandManager implements vscode.Disposable {
     private readonly dashboardView: OpenDashboard;
     private readonly authManager: AuthManager;
 
-    constructor() {
-        this.authManager = new AuthManager();
+    constructor(context: vscode.ExtensionContext) {
+        this.authManager = new AuthManager(context.secrets);
         this.dashboardView = new OpenDashboard(this.authManager);
 
         const openDashboard = vscode.commands.registerCommand("discode.openDashboard", () => {
@@ -16,6 +16,10 @@ export class CommandManager implements vscode.Disposable {
         });
 
         this.disposables.push(openDashboard);
+    }
+
+    public async initialize(): Promise<void> {
+        await this.authManager.initialize();
     }
 
     public async execute(message: any): Promise<void> {
