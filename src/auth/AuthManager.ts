@@ -23,8 +23,10 @@ function isAuthenticationSession(value: unknown): value is vscode.Authentication
     return typeof account.id === "string" && typeof account.label === "string";
 }
 
-export class AuthManager {
+export class AuthManager implements vscode.Disposable {
     private session?: vscode.AuthenticationSession;
+    private readonly authenticationChangeEmitter = new vscode.EventEmitter<boolean>();
+    public readonly onDidChangeAuthentication = this.authenticationChangeEmitter.event;
 
     constructor(private readonly secretStorage: vscode.SecretStorage) {}
 
@@ -54,6 +56,7 @@ export class AuthManager {
         }
 
         this.session = session;
+        this.authenticationChangeEmitter.fire(true);
     }
 
     public async login(): Promise<vscode.AuthenticationSession> {
@@ -69,6 +72,7 @@ export class AuthManager {
                 JSON.stringify(session)
             );
             this.session = session;
+            this.authenticationChangeEmitter.fire(true);
             vscode.window.showInformationMessage(
                 `Welcome ${session.account.label}!`
             );
@@ -83,6 +87,7 @@ export class AuthManager {
     public async logout(): Promise<void> {
         await this.secretStorage.delete(SESSION_SECRET_KEY);
         this.session = undefined;
+        this.authenticationChangeEmitter.fire(false);
     }
 
     public getSession(): vscode.AuthenticationSession | undefined {
@@ -91,6 +96,10 @@ export class AuthManager {
 
     public isAuthenticated(): boolean {
         return this.session !== undefined;
+    }
+
+    public dispose(): void {
+        this.authenticationChangeEmitter.dispose();
     }
     
 }

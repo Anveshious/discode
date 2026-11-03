@@ -16,7 +16,7 @@ export class OpenDashboard {
             return;
         }
 
-        this.panel = vscode.window.createWebviewPanel(
+        const panel = vscode.window.createWebviewPanel(
             "discodeDashboard",
             "Discode Dashboard",
             vscode.ViewColumn.One,
@@ -24,11 +24,15 @@ export class OpenDashboard {
                 enableScripts: true,
             }
         );
+        this.panel = panel;
 
-        this.panel.webview.html = this.getHtmlContent();
+        panel.webview.html = this.getHtmlContent();
 
-        this.panel.webview.onDidReceiveMessage(async(message) => {
+        panel.webview.onDidReceiveMessage(async(message) => {
             switch (message.type) {
+                case "webview.ready":
+                    await this.postAuthenticationState(panel);
+                    break;
                 case "auth.login":
                     try {
                         await this.authManager.login();
@@ -38,7 +42,7 @@ export class OpenDashboard {
 
                     try {
                         const user = await this.githubService.getCurrentUser();
-                        await this.panel?.webview.postMessage({
+                        await panel.webview.postMessage({
                             type: "auth.profile",
                             user,
                         });
@@ -46,11 +50,36 @@ export class OpenDashboard {
                         await vscode.window.showErrorMessage("Unable to load your GitHub profile.");
                     }
                     break;
+                case "auth.logout":
+                    try {
+                        await this.authManager.logout();
+                    } catch {
+                        await vscode.window.showErrorMessage("Unable to sign out of GitHub.");
+                    }
+                    break;
             }
         });
 
-        this.panel.onDidDispose(() => {
+        const authStateSubscription = this.authManager.onDidChangeAuthentication(
+            () => {
+                void this.postAuthenticationState(panel).catch((error: unknown) => {
+                    console.error("Failed to update dashboard authentication state.", error);
+                });
+            }
+        );
+
+        panel.onDidDispose(() => {
+            authStateSubscription.dispose();
             this.panel = undefined;
+        });
+    }
+
+    private async postAuthenticationState(panel: vscode.WebviewPanel): Promise<void> {
+        const session = this.authManager.getSession();
+        await panel.webview.postMessage({
+            type: "auth.state",
+            authenticated: session !== undefined,
+            accountLabel: session?.account.label,
         });
     }
 
@@ -314,8 +343,8 @@ export class OpenDashboard {
                 <div class="status-container" style="margin-bottom: 1rem;">
                     <span class="status-label">Status</span>
                     <div class="status-indicator">
-                        <span class="dot online"></span>
-                        <span>Online</span>
+                        <span class="dot online" id="statusDotLoggedIn"></span>
+                        <span id="statusTextLoggedIn">Online</span>
                     </div>
                 </div>
 
@@ -343,13 +372,9 @@ export class OpenDashboard {
         }
 
         function logout() {
-            // 1. Send message to extension backend
             if (vscode) {
                 vscode.postMessage({ type: "auth.logout" });
             }
-            
-            // 2. Immediately update the UI locally so the user sees the change
-            setViewState(false);
         }
 
         // Logic to swap the screens
@@ -370,11 +395,20 @@ export class OpenDashboard {
         window.addEventListener('message', event => {
             const message = event.data;
             if (message.type === 'auth.profile') {
-                setViewState(true);
                 document.getElementById('userName').textContent =
                     message.user.name || message.user.login;
+            } else if (message.type === 'auth.state') {
+                setViewState(message.authenticated);
+                if (message.authenticated && message.accountLabel) {
+                    document.getElementById('userName').textContent =
+                        message.accountLabel;
+                }
             }
         });
+
+        if (vscode) {
+            vscode.postMessage({ type: "webview.ready" });
+        }
     </script>
 </body>
 </html>`;

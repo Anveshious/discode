@@ -11,6 +11,15 @@ export class StatusBarManager implements vscode.Disposable {
     this.statusBar.color = state.color;
   }
 
+  public updateAuthenticationState(isAuthenticated: boolean): void {
+    this.update({
+      text: isAuthenticated ? "$(radio-tower) Discode: Online" : "$(radio-tower) Discode",
+      tooltip: isAuthenticated ? "Signed in to GitHub" : "Sign in to GitHub",
+      command: "discode.openDashboard",
+      color: isAuthenticated ? new vscode.ThemeColor("charts.green") : undefined
+    });
+  }
+
   public show(): void {
     this.statusBar.show();
   }
