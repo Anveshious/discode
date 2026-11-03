@@ -1,4 +1,8 @@
 import * as vscode from "vscode";
+import {
+  PresenceStatus,
+  PRESENCE_STATUS_LABELS
+} from "../models/PresenceStatus";
 import { StatusBarState } from "../models/StatusBarState";
 
 export class StatusBarManager implements vscode.Disposable {
@@ -11,12 +15,20 @@ export class StatusBarManager implements vscode.Disposable {
     this.statusBar.color = state.color;
   }
 
-  public updateAuthenticationState(isAuthenticated: boolean): void {
+  public updatePresence(isAuthenticated: boolean, status: PresenceStatus): void {
+    const label = isAuthenticated ? PRESENCE_STATUS_LABELS[status] : "Offline";
+    const colorByStatus: Record<PresenceStatus, string> = {
+      online: "charts.green",
+      idle: "charts.orange",
+      focused: "charts.blue",
+      "open-to-contribute": "charts.purple"
+    };
+
     this.update({
-      text: isAuthenticated ? "$(radio-tower) Discode: Online" : "$(radio-tower) Discode",
-      tooltip: isAuthenticated ? "Signed in to GitHub" : "Sign in to GitHub",
+      text: `$(radio-tower) Discode: ${label}`,
+      tooltip: isAuthenticated ? `GitHub presence: ${label}` : "Sign in to GitHub",
       command: "discode.openDashboard",
-      color: isAuthenticated ? new vscode.ThemeColor("charts.green") : undefined
+      color: isAuthenticated ? new vscode.ThemeColor(colorByStatus[status]) : undefined
     });
   }
 
@@ -34,10 +46,7 @@ export class StatusBarManager implements vscode.Disposable {
       100
     );
 
-    this.update({
-      text: "$(radio-tower) Discode",
-      command: "discode.openDashboard"
-    });
+    this.updatePresence(false, "online");
 
     this.statusBar.show();
   }
