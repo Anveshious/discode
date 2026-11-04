@@ -6,7 +6,7 @@
 
 Discode is a VS Code extension that aims to bring developer discovery, social connections, and real-time presence into the coding environment. Using GitHub as the identity provider, Discode is designed to help developers find one another, build a network of coding friends, and see when those friends are online or open to collaboration — without leaving VS Code.
 
-> **Project status:** Early development / prototype. GitHub authentication and the initial extension interface are implemented. Backend-powered social features and cross-user real-time presence are planned.
+> **Project status:** Early development / prototype. GitHub authentication and the initial extension interface are implemented. The backend now has an Express/PostgreSQL foundation; backend-powered social features and cross-user real-time presence remain planned.
 
 ---
 
@@ -128,7 +128,8 @@ The project is currently an early-stage VS Code extension prototype.
 
 ### Planned
 
-- [ ] Backend API and PostgreSQL database.
+- [x] Backend Express API foundation, PostgreSQL connection configuration, and database health endpoint.
+- [ ] Backend user API and PostgreSQL schema/migrations.
 - [ ] Discode user registration and profile persistence.
 - [ ] GitHub username search and public profile discovery.
 - [ ] Registered-user detection and invitation flow.
@@ -175,7 +176,9 @@ The GitHub authentication provider establishes the user's identity in the extens
 
 GitHub usernames can change, so the numeric GitHub account ID is the stable identity key. The username and other profile fields are presentation data, not account keys. Signing out of Discode clears the extension's local authenticated state; the GitHub account itself remains signed in to VS Code.
 
-This is the intended architecture; the backend, database and real-time infrastructure are not yet implemented in the current prototype.
+The backend directory now contains the Express API scaffold, PostgreSQL connection pool, environment configuration, local Compose database, and a database-aware health route. User registration, social APIs, database schema/migrations and real-time infrastructure are not yet implemented.
+
+See [backend/README.md](./backend/README.md) for backend setup and development commands.
 
 ---
 
@@ -206,6 +209,9 @@ The extension currently follows a modular TypeScript structure.
 src/
 ├── auth/
 │   └── AuthManager.ts
+├── backend/
+│   ├── src/
+│   └── test/
 ├── commands/
 │   └── CommandManager.ts
 ├── core/
