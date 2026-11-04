@@ -1,142 +1,302 @@
 # Discode
 
-**Discode** is a Visual Studio Code extension, presented by **Codespace**, that brings developer presence to your editor — inspired by Discord and Steam's "currently playing" systems, but for code.
+### Developer Presence for VS Code
 
-The long-term vision: open VS Code, and your friends can see that you're online, coding, idle, or offline — and eventually, what you're working on. Discode aims to make coding feel a little more social and a little less solitary.
+**Know when your friends are coding.**
 
-> **Status: early development.** Discode is a work-in-progress summer project. This README is kept accurate on purpose — anything listed under "Planned" is *not* built yet. See [Roadmap](#roadmap) for what's coming.
+Discode is a VS Code extension that aims to bring developer discovery, social connections, and real-time presence into the coding environment. Using GitHub as the identity provider, Discode is designed to help developers find one another, build a network of coding friends, and see when those friends are online or open to collaboration — without leaving VS Code.
 
----
-
-## Table of Contents
-
-- [Features](#features)
-  - [Implemented](#implemented)
-  - [Planned](#planned)
-- [Requirements](#requirements)
-- [Extension Settings](#extension-settings)
-- [Architecture](#architecture)
-- [Development Roadmap](#roadmap)
-- [Known Issues](#known-issues)
-- [Contributing](#contributing)
-- [Release Notes](#release-notes)
-- [License](#license)
+> **Project status:** Early development / prototype. GitHub authentication and the initial extension interface are implemented. Backend-powered social features and cross-user real-time presence are planned.
 
 ---
 
-## Features
+## The Idea
+
+Discode takes inspiration from the social experience of Discord and brings it directly into Visual Studio Code.
+
+A developer signs in using GitHub. Their GitHub username becomes their Discode identity. They can then search for other GitHub developers, connect with people already using Discode, and invite developers who have not joined yet.
+
+Once connected, friends will be able to see one another's availability and permitted coding activity through the VS Code interface. A lightweight notification system will make it possible to know when a friend comes online or becomes available to collaborate.
+
+**The goal is to make coding feel less isolated and make developer collaboration easier to discover.**
+
+## Planned Features
+
+### 1. GitHub Authentication
+
+- Sign in through VS Code's built-in GitHub authentication provider.
+- Use the authenticated GitHub account as the user's Discode identity.
+- Retrieve relevant public profile information.
+- Avoid creating a separate username and password system.
+
+### 2. Developer Discovery
+
+Search for developers using their GitHub usernames.
+
+| Search result | Expected behaviour |
+|---|---|
+| GitHub user is registered on Discode | Display their Discode profile and allow a friend request |
+| GitHub user exists but is not on Discode | Offer an invitation to join |
+| GitHub user does not exist | Display a user-not-found result |
+
+Discode will use GitHub's supported APIs for public user search and profile lookup. It will maintain its **own user registry** to identify which GitHub accounts have registered on Discode; GitHub does not provide an unrestricted downloadable database of every username.
+
+### 3. Friends and Connections
+
+- Send, receive, accept and reject friend requests.
+- Maintain a friends list inside the Discode dashboard.
+- Remove existing connections.
+- Show friends' availability and permitted activity.
+
+Friend relationships will be managed by Discode rather than inferred from GitHub followers.
+
+### 4. Developer Presence and Status
+
+Discode is intended to support the following statuses:
+
+| Status | Meaning |
+|---|---|
+| Online | Available and active in VS Code |
+| Idle | Inactive for a configurable period |
+| Focused | Deep work; prefers fewer interruptions |
+| Open to Contribute | Available for collaboration |
+| Offline | Not connected to Discode |
+
+Users should be able to select a status manually, while automatic activity detection provides supporting presence information. Manual status and connection state should remain distinct.
+
+### 5. Coding Activity
+
+With user permission, Discode may display lightweight activity such as:
+
+- Whether a friend is actively coding.
+- Current programming language.
+- Current filename.
+- Workspace or project name.
+
+Privacy is a core requirement: Discode should not share source code, full local file paths, or private workspace information by default. Activity visibility should be configurable.
+
+### 6. VS Code Notifications
+
+Native VS Code notifications are planned for relevant friend activity, such as:
+
+- A friend coming online.
+- A friend becoming available to contribute.
+- A relevant presence change.
+
+Notifications should be configurable and dismissible so that Discode does not interrupt focused work.
+
+### 7. Discode Dashboard
+
+The dashboard is the central social interface inside VS Code. The planned dashboard will bring together:
+
+- GitHub profile and Discode identity.
+- Current status selector.
+- Friends list and online indicators.
+- GitHub username search.
+- Incoming and outgoing friend requests.
+- Invitation actions.
+- Privacy and notification settings.
+
+---
+
+## Current Implementation
+
+The project is currently an early-stage VS Code extension prototype.
 
 ### Implemented
 
-These features exist in the codebase today and can be tried right now:
+- [x] TypeScript-based VS Code extension scaffold.
+- [x] GitHub authentication using VS Code's built-in authentication API.
+- [x] Retrieval of the authenticated GitHub account identity.
+- [x] GitHub profile service and profile data model.
+- [x] Reusable Discode dashboard opened through `discode.openDashboard`.
+- [x] Status bar presence item.
+- [x] Modular extension structure separating authentication, commands, services, models and UI.
+- [x] Initial presence-status definitions, including Online, Idle, Focused and Open to Contribute.
+- [x] Local presence tracking groundwork.
 
-- **GitHub authentication** — Sign in with your GitHub account via VS Code's built-in authentication provider (`vscode.authentication.getSession`).
-- **Status bar presence item** — Discode adds an item to the VS Code status bar.
-- **Dashboard panel** — A command opens a reusable Discode dashboard (`WebviewPanel`), which can be reopened and closed cleanly (`panel.reveal()` / `onDidDispose`).
-- **Core extension architecture** — The extension is organized into focused components (`ExtensionController`, `CommandManager`, `AuthManager`, `StatusBarManager`, `DashboardView`) with clear responsibility boundaries. See [Architecture](#architecture).
+### In Progress / Needs Integration
 
-> No screenshots yet — these will be added here once the dashboard UI is finalized.
+- [ ] Finalize the dashboard experience and connect all UI states to extension services.
+- [ ] Complete and verify automatic local presence transitions.
+- [ ] Establish the backend contract and connect the extension to it.
+- [ ] Define persistent Discode user registration and identity verification.
 
 ### Planned
 
-These features are designed and discussed, but **not yet implemented**. They are listed here to set expectations, not to claim functionality:
+- [ ] Backend API and PostgreSQL database.
+- [ ] Discode user registration and profile persistence.
+- [ ] GitHub username search and public profile discovery.
+- [ ] Registered-user detection and invitation flow.
+- [ ] Friend requests and connection management.
+- [ ] Real-time online/offline presence across users.
+- [ ] Manual status selection and synchronization.
+- [ ] Privacy-controlled coding activity sharing.
+- [ ] Real-time friend notifications.
+- [ ] Dashboard redesign and account settings.
+- [ ] Testing, packaging and eventual Marketplace release.
 
-- **Local presence detection** — A state machine (`Online → Coding → Idle → Offline`) that reflects real editing activity in the status bar, based on signals like active document edits, window focus, and inactivity duration.
-- **GitHub profile display** — Showing the authenticated user's avatar, username, display name, followers, and following count in the dashboard.
-- **Discode friends system** — A dedicated friend system (friend requests via GitHub username) that is explicitly separate from GitHub followers/following. GitHub followers will **not** automatically become Discode friends.
-- **Real-time presence sharing** — Seeing friends' online/coding/idle/offline status, powered by a backend service.
-- **React-based dashboard** — A migration of the dashboard from static HTML to React + TypeScript + Vite for a more maintainable, interactive UI.
+> **Status note:** The checklist reflects the current project baseline. A local status model or tracker does not mean that friends can already see one another's presence. Cross-user functionality requires the backend and real-time service.
 
 ---
 
-## Requirements
+## Technical Direction
 
-- Visual Studio Code (recent version — exact minimum `engines.vscode` version TBD).
-- A GitHub account, for signing in.
-- Node.js and npm, if building/running the extension from source.
+The extension is being developed with a modular architecture so that authentication, presence, dashboard UI and future social features can evolve independently.
 
-No additional runtime dependencies are required for the currently implemented features. The planned backend (see [Roadmap](#roadmap)) will introduce its own requirements once built.
+| Layer | Planned technology | Responsibility |
+|---|---|---|
+| VS Code extension | TypeScript, VS Code Extension API | Authentication, editor integration, commands and notifications |
+| Dashboard | VS Code Webview; React as a future option | Social interface and user interactions |
+| Backend | Node.js, Express | User registration, profiles, friend relationships and API |
+| Database | PostgreSQL | Persistent users, connections and preferences |
+| Real-time service | Socket.IO / WebSockets | Presence and activity synchronization |
+| Identity and discovery | GitHub Authentication API and GitHub REST API | Authentication and public profile lookup |
 
-## Extension Settings
+### High-Level Architecture
 
-Discode does not currently contribute any user-configurable settings via `contributes.configuration`.
-
-Planned settings, once presence detection and the friends system exist, may include things like:
-
-- `discode.idleTimeout` — how long without activity before status changes to Idle.
-- `discode.shareProjectName` — whether to share the current project/language with friends, or keep it private.
-
-These are **not implemented** and are listed here only as an indication of future direction.
-
-## Architecture
-
-Discode is organized into small, single-responsibility components:
-
-```text
-ExtensionController
-        |
-        |-- StatusBarManager   (owns the status bar item)
-        |
-        |-- CommandManager     (routes commands & dashboard messages)
-        |
-        |-- AuthManager        (owns the GitHub auth session)
-        |
-        |-- DashboardView      (owns the webview panel)
+```mermaid
+flowchart TD
+    A[VS Code Extension] <-->|HTTPS / WebSocket| B[Discode Backend]
+    A --> C[Discode Dashboard]
+    B <--> D[(PostgreSQL Database)]
+    B <--> E[GitHub API]
+    B <--> F[Real-Time Presence Service]
+    F <-->|Presence updates| B
 ```
 
-Key principles:
+The GitHub authentication provider establishes the user's identity in the extension. The backend must independently verify the identity presented by the extension before creating or accessing a Discode account. The backend then manages Discode-specific data, while the real-time service distributes presence updates to authorized friends.
 
-- The dashboard (webview) never talks to `AuthManager` or GitHub directly — it sends messages, and `CommandManager` routes them to the right component.
-- Authentication logic is isolated in `AuthManager`.
-- Business logic for talking to the GitHub API will live in a dedicated `GitHubService`, called only through `CommandManager`.
-
-A migration to a React-based dashboard (TypeScript + Vite) is under consideration but not scheduled — see [Roadmap](#roadmap).
-
-## Roadmap
-
-Development proceeds one milestone at a time. Rough order of priority:
-
-1. **Local presence engine** — Build the Online/Coding/Idle/Offline state machine from local VS Code activity signals only (no backend). Reflect it accurately in the status bar.
-2. **GitHub profile in dashboard** — Fetch and display the authenticated user's avatar, name, and username via a `GitHubService`.
-3. **README & polish for public release** — Keep documentation honest and up to date as an MVP milestone.
-4. **Friends system (backend)** — Introduce a minimal backend (candidate stack: Node.js, Express, Socket.IO, MongoDB — not finalized) to support friend requests and cross-user presence.
-5. **Real-time presence sharing** — Heartbeats and live status updates between friends.
-6. **React + Vite dashboard migration** — Once the dashboard has enough interactive surface area to justify it.
-
-This order is intentional: nothing that requires a backend is prioritized before the local, backend-free version is solid.
-
-## Known Issues
-
-- No known issues have been filed yet, since presence detection and GitHub profile/follower integration are not yet built.
-- This section will be kept current as features ship and real issues surface.
-
-## Contributing
-
-Discode is an early-stage, learning-driven project. Contributions, suggestions, and issue reports are welcome once the project is public.
-
-Until a `CONTRIBUTING.md` exists, the short version:
-
-- Open an issue before submitting a large pull request.
-- Keep changes scoped — this project favors small, incremental milestones over large refactors.
-- Match the existing architecture (see [Architecture](#architecture)) rather than introducing new patterns without discussion.
-- Run `npm run setup:hooks` once after cloning to enable the commit hook, which adds the staged file paths to `CHANGELOG.md` before each commit.
-
-## Release Notes
-
-### Unreleased
-
-- Initial extension scaffold (TypeScript).
-- GitHub authentication via `vscode.authentication.getSession`.
-- Status bar item.
-- Dashboard command and reusable `WebviewPanel`.
-- Core component architecture (`ExtensionController`, `CommandManager`, `AuthManager`, `StatusBarManager`, `DashboardView`).
-
-No versioned release has been published yet. This section will be updated with real version numbers (e.g. `0.1.0`) at the first public release.
-
-## License
-
-License to be determined before public release.
+This is the intended architecture; the backend, database and real-time infrastructure are not yet implemented in the current prototype.
 
 ---
 
-*This README reflects the actual state of the project and is updated as features move from "Planned" to "Implemented."*
+## Development Roadmap
+
+Development will proceed incrementally, preserving the working extension while introducing the backend and social features.
+
+| Phase | Scope | Status |
+|---|---|---|
+| 01 | GitHub authentication and identity | Implemented groundwork |
+| 02 | Backend integration and user registration | Planned |
+| 03 | GitHub username search and developer discovery | Planned |
+| 04 | Friend requests and social connections | Planned |
+| 05 | Real-time online/offline presence | Planned |
+| 06 | Custom statuses and activity detection | Local groundwork; synchronization planned |
+| 07 | VS Code notifications | Planned |
+| 08 | Dashboard improvements, privacy controls and polish | Ongoing / planned |
+
+Phases may overlap as implementation and testing progress. The roadmap will be updated as features are completed and verified.
+
+---
+
+## Project Structure
+
+The extension currently follows a modular TypeScript structure.
+
+```text
+src/
+├── auth/
+│   └── AuthManager.ts
+├── commands/
+│   └── CommandManager.ts
+├── core/
+│   └── ExtensionController.ts
+├── gitHub/
+│   └── GithubService.ts
+├── models/
+│   ├── GitHubUser.ts
+│   ├── PresenceStatus.ts
+│   ├── StatusBarState.ts
+│   └── user.ts
+├── presence/
+│   └── presenceTracker.ts
+├── services/
+│   ├── GitHubService.ts
+│   └── PresenceManager.ts
+├── ui/
+│   └── StatusBarManager.ts
+├── webview/
+│   └── DashboardView.ts
+└── extension.ts
+```
+
+The structure may evolve as the dashboard and backend integration grow. The backend is expected to become a separately organized component rather than placing server responsibilities inside the VS Code extension.
+
+---
+
+## Running the Extension Locally
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/)
+- npm
+- [Visual Studio Code](https://code.visualstudio.com/)
+- GitHub account
+
+### Setup
+
+```bash
+# Clone the repository
+git clone <repository-url>
+
+# Enter the project directory
+cd discode
+
+# Install dependencies
+npm install
+
+# Compile the extension
+npm run compile
+```
+
+### Launch
+
+1. Open the project folder in VS Code.
+2. Press `F5` to launch the Extension Development Host.
+3. Open the Command Palette.
+4. Run **Discode: Open Dashboard**.
+5. Sign in with GitHub when prompted.
+
+### Available Scripts
+
+| Command | Purpose |
+|---|---|
+| `npm install` | Install project dependencies |
+| `npm run compile` | Compile TypeScript |
+| `npm run watch` | Watch and compile source changes |
+| `npm run lint` | Run ESLint |
+| `npm test` | Compile, lint and run extension tests |
+
+---
+
+## Security and Privacy Principles
+
+Discode is designed around minimal and user-controlled presence sharing.
+
+- GitHub authentication tokens must be handled securely and never committed to the repository.
+- The backend must verify authenticated identities; a submitted username alone is not proof of ownership.
+- Only the minimum profile and presence data required for the service should be stored.
+- Users should control which coding-activity details are visible to friends.
+- Source code and full local file paths must never be transmitted as presence data.
+- Real-time connections and backend communication must use secure transport.
+- Users should be able to control notifications and activity visibility.
+- Account deletion and associated data removal must be supported when the backend is introduced.
+
+---
+
+## Current Focus
+
+The immediate priority is to move from a locally functioning extension prototype to a connected Discode service.
+
+**Next major milestone:** establish the backend, define the user identity and registration flow, and connect the existing extension to persistent Discode accounts.
+
+Features will be marked complete only after they are implemented and tested, not merely designed.
+
+---
+
+## Project Status
+
+Discode is actively being developed. The current repository represents an evolving prototype, and the planned architecture and feature set may change as implementation progresses.
+
+**Built for developers, by developers.**

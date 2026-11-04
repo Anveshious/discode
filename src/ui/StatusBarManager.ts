@@ -8,6 +8,20 @@ import { StatusBarState } from "../models/StatusBarState";
 export class StatusBarManager implements vscode.Disposable {
   private statusBar: vscode.StatusBarItem;
 
+  constructor() {
+    this.statusBar = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Right,
+      100
+    );
+
+    this.update({
+      text: "$(radio-tower) Discode",
+      command: "discode.openDashboard",
+    });
+
+    this.statusBar.show();
+  }
+
   public update(state: StatusBarState): void {
     this.statusBar.text = state.text;
     this.statusBar.tooltip = state.tooltip;
@@ -38,16 +52,5 @@ export class StatusBarManager implements vscode.Disposable {
 
   public dispose(): void {
     this.statusBar.dispose();
-  }
-
-  constructor() {
-    this.statusBar = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
-      100
-    );
-
-    this.updatePresence(false, "online");
-
-    this.statusBar.show();
   }
 }

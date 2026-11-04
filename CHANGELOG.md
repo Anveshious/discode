@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `README.md`, `package-lock.json`, `package.json`, `src/test/extension.test.ts`, `src/test/presenceTracker.test.ts`, and 1 more
 - Staged paths: `.mcp.json`, `src/auth/AuthManager.ts`, `src/commands/CommandManager.ts`, `src/models/PresenceStatus.ts`, `src/presence/presenceTracker.ts`, and 3 more
 - Staged paths: `src/commands/CommandManager.ts`, `src/core/ExtensionController.ts`, `src/models/PresenceStatus.ts`, `src/services/PresenceManager.ts`, `src/ui/StatusBarManager.ts`, and 1 more
 - Staged paths: `eslint.config.mjs`, `package.json`
