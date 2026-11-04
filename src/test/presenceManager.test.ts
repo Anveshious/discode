@@ -29,7 +29,13 @@ suite("PresenceManager Test Suite", () => {
             assert.strictEqual(manager.getStatus(), "focused");
             assert.strictEqual(manager.getManualStatus(), "focused");
 
+            manager.setActivity("offline");
+            assert.strictEqual(manager.getStatus(), "offline");
+            manager.setActivity("active");
+            assert.strictEqual(manager.getStatus(), "focused");
+
             await manager.setManualStatus("online");
+            manager.setActivity("idle");
             assert.strictEqual(manager.getStatus(), "idle");
             assert.strictEqual(manager.getManualStatus(), "online");
         } finally {

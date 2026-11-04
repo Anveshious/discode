@@ -35,14 +35,17 @@ export class StatusBarManager implements vscode.Disposable {
       online: "charts.green",
       idle: "charts.orange",
       focused: "charts.blue",
-      "open-to-contribute": "charts.purple"
+      "open-to-contribute": "charts.purple",
+      offline: "descriptionForeground"
     };
 
     this.update({
       text: `$(radio-tower) Discode: ${label}`,
       tooltip: isAuthenticated ? `GitHub presence: ${label}` : "Sign in to GitHub",
       command: "discode.openDashboard",
-      color: isAuthenticated ? new vscode.ThemeColor(colorByStatus[status]) : undefined
+      color: isAuthenticated && status !== "offline"
+        ? new vscode.ThemeColor(colorByStatus[status])
+        : undefined
     });
   }
 

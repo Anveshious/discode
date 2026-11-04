@@ -142,7 +142,7 @@ The project is currently an early-stage VS Code extension prototype.
 
 > **Status note:** The checklist reflects the current project baseline. A local status model or tracker does not mean that friends can already see one another's presence. Cross-user functionality requires the backend and real-time service.
 
-Automatic presence detects editor activity and VS Code focus locally. After five minutes without editor activity, or when VS Code loses focus, activity becomes Idle. Selecting Focused or Open to Contribute sets a separate manual override; choosing Automatic returns to the activity-derived Online/Idle state.
+Automatic presence initializes with the extension and detects editor activity and VS Code focus locally. After five minutes without editor activity, or when VS Code loses focus, activity becomes Idle. When no editor is active or the extension shuts down, its local presence becomes Offline and pending idle timers are cleared. Selecting Focused or Open to Contribute sets a separate manual override while the extension is active; choosing Automatic returns to the activity-derived Online/Idle state.
 
 ---
 

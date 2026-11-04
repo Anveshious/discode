@@ -53,4 +53,27 @@ suite('PresenceTracker Test Suite', () => {
 			tracker.dispose();
 		}
 	});
+
+	test('publishes offline when disposed and clears pending activity', async () => {
+		const doc = await vscode.workspace.openTextDocument({
+			content: 'const stopping = true;',
+			language: 'typescript',
+		});
+		await vscode.window.showTextDocument(doc);
+		const tracker = new PresenceTracker(1000);
+		const changes: string[] = [];
+		const subscription = tracker.onDidChangePresence((presence) => {
+			changes.push(presence.status);
+		});
+
+		try {
+			assert.strictEqual(tracker.getCurrentPresence().status, 'active');
+			tracker.dispose();
+			assert.strictEqual(changes[changes.length - 1], 'offline');
+			assert.strictEqual(tracker.getCurrentPresence().status, 'offline');
+		} finally {
+			subscription.dispose();
+			tracker.dispose();
+		}
+	});
 });

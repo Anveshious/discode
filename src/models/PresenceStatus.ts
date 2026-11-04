@@ -3,6 +3,7 @@ export const PRESENCE_STATUSES = [
     "idle",
     "focused",
     "open-to-contribute",
+    "offline",
 ] as const;
 
 export type PresenceStatusValue = typeof PRESENCE_STATUSES[number];
@@ -35,6 +36,7 @@ export const PRESENCE_STATUS_LABELS: Record<PresenceStatusValue, string> = {
     idle: "Idle",
     focused: "Focused",
     "open-to-contribute": "Open to contribute",
+    offline: "Offline",
 };
 
 export const PRESENCE_STATUS_DESCRIPTIONS: Record<PresenceStatusValue, string> = {
@@ -42,6 +44,7 @@ export const PRESENCE_STATUS_DESCRIPTIONS: Record<PresenceStatusValue, string> =
     idle: "Around, but may be away from your editor.",
     focused: "Deep in a task. Please avoid interruptions.",
     "open-to-contribute": "Available to collaborate or help with an issue.",
+    offline: "Not currently active in VS Code.",
 };
 
 export function isPresenceStatus(value: unknown): value is PresenceStatusValue {

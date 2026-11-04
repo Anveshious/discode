@@ -13,6 +13,7 @@ export class PresenceTracker implements vscode.Disposable {
     private current: PresenceStatus;
     private idleTimer?: NodeJS.Timeout;
     private readonly idleThresholdMs: number;
+    private disposed = false;
 
     constructor(idleThresholdMs: number = DEFAULT_IDLE_THRESHOLD_MS) {
         this.idleThresholdMs = idleThresholdMs;
@@ -50,12 +51,16 @@ export class PresenceTracker implements vscode.Disposable {
             this.markActive();
         } else {
             this.clearIdleTimer();
-            this.update({ ...this.current, status: "idle" });
+            this.update({
+                ...this.current,
+                status: this.hasActiveEditor() ? "idle" : "offline",
+            });
         }
     }
 
     private handleEditorChange(editor: vscode.TextEditor | undefined): void {
         if (!editor) {
+            this.clearIdleTimer();
             this.update({
                 status: "offline",
                 isWindowFocused: this.current.isWindowFocused,
@@ -151,7 +156,27 @@ export class PresenceTracker implements vscode.Disposable {
     }
 
     public dispose(): void {
+        if (this.disposed) {
+            return;
+        }
+        this.disposed = true;
         this.clearIdleTimer();
+        if (
+            this.current.status !== "offline"
+            || this.current.fileName !== undefined
+            || this.current.languageId !== undefined
+            || this.current.workspaceName !== undefined
+            || this.current.gitBranch !== undefined
+        ) {
+            this.update({
+                ...this.current,
+                status: "offline",
+                fileName: undefined,
+                languageId: undefined,
+                workspaceName: undefined,
+                gitBranch: undefined,
+            });
+        }
         this.disposables.forEach((d) => d.dispose());
         this.onDidChangeEmitter.dispose();
     }

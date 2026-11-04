@@ -514,7 +514,10 @@ export class OpenDashboard {
                         ? 'Open to Contribute'
                         : status.charAt(0).toUpperCase() + status.slice(1);
                 const statusDot = document.getElementById('statusDotLoggedIn');
-                statusDot.classList.toggle('online', status !== 'idle');
+                statusDot.classList.toggle(
+                    'online',
+                    status !== 'idle' && status !== 'offline'
+                );
                 document.getElementById('manualStatus').value = message.manualStatus;
             }
         });
