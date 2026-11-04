@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../auth/AuthManager";
-import { GitHubService } from "../services/GitHubService";
+import { DiscodeService } from "../services/DiscodeService";
 import { ManualPresenceStatus } from "../models/PresenceStatus";
 import { PresenceManager } from "../services/PresenceManager";
 
@@ -12,13 +12,13 @@ function isManualPresenceStatus(value: unknown): value is ManualPresenceStatus {
 
 export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
-    private readonly githubService: GitHubService;
+    private readonly discodeService: DiscodeService;
 
     constructor(
         private readonly authManager: AuthManager,
         private readonly presenceManager: PresenceManager
     ) {
-        this.githubService = new GitHubService(authManager);
+        this.discodeService = new DiscodeService(authManager);
     }
 
     public async show(): Promise<void> {
@@ -115,7 +115,7 @@ export class OpenDashboard {
         }
 
         try {
-            const user = await this.githubService.getCurrentUser();
+            const result = await this.discodeService.signIn();
             if (
                 this.panel !== panel
                 || this.authManager.getSession()?.id !== session.id
@@ -126,7 +126,8 @@ export class OpenDashboard {
 
             await panel.webview.postMessage({
                 type: "auth.profile",
-                user,
+                user: result.user,
+                created: result.created,
             });
         } catch (error) {
             const message = error instanceof Error
@@ -486,12 +487,12 @@ export class OpenDashboard {
             const message = event.data;
             if (message.type === 'auth.profile') {
                 document.getElementById('userName').textContent =
-                    message.user.name || message.user.login;
-                document.getElementById('userLogin').textContent = message.user.login;
+                    message.user.name || message.user.username;
+                document.getElementById('userLogin').textContent = message.user.username;
                 document.getElementById('userId').textContent =
-                    String(message.user.id);
+                    message.user.githubId;
                 const avatar = document.getElementById('userAvatar');
-                avatar.src = message.user.avatar_url;
+                avatar.src = message.user.avatarUrl;
                 avatar.hidden = false;
             } else if (message.type === 'auth.state') {
                 setViewState(message.authenticated);

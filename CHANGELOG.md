@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `README.md`, `backend/README.md`, `backend/src/app.js`, `backend/src/db/migrate.js`, `backend/src/db/migrations/001_create_users.sql`, and 6 more
 - Staged paths: `.gitignore`, `README.md`, `backend/.env.example`, `backend/README.md`, `backend/compose.yaml`, and 8 more
 - Staged paths: `README.md`, `src/core/ExtensionController.ts`, `src/models/PresenceStatus.ts`, `src/presence/presenceTracker.ts`, `src/services/PresenceManager.ts`, and 4 more
 - Staged paths: `README.md`, `src/commands/CommandManager.ts`, `src/core/ExtensionController.ts`, `src/models/PresenceStatus.ts`, `src/presence/presenceTracker.ts`, and 4 more

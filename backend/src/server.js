@@ -1,7 +1,9 @@
 import { createApp } from "./app.js";
 import { config } from "./config/env.js";
+import { migrate } from "./db/migrate.js";
 import { pool } from "./db/pool.js";
 
+await migrate(pool);
 const server = createApp(pool).listen(config.port, () => {
   console.log(`Discode API listening on port ${config.port}.`);
 });

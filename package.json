@@ -19,7 +19,17 @@
         "command": "discode.openDashboard",
         "title": "Open Discode Dashboard"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Discode",
+      "properties": {
+        "discode.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "Discode backend base URL. HTTPS is required except for localhost."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

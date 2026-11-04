@@ -129,6 +129,7 @@ The project is currently an early-stage VS Code extension prototype.
 ### Planned
 
 - [x] Backend Express API foundation, PostgreSQL connection configuration, and database health endpoint.
+- [x] GitHub-verified sign-in that creates or updates a Discode account using the numeric GitHub ID.
 - [ ] Backend user API and PostgreSQL schema/migrations.
 - [ ] Discode user registration and profile persistence.
 - [ ] GitHub username search and public profile discovery.
@@ -176,7 +177,7 @@ The GitHub authentication provider establishes the user's identity in the extens
 
 GitHub usernames can change, so the numeric GitHub account ID is the stable identity key. The username and other profile fields are presentation data, not account keys. Signing out of Discode clears the extension's local authenticated state; the GitHub account itself remains signed in to VS Code.
 
-The backend directory now contains the Express API scaffold, PostgreSQL connection pool, environment configuration, local Compose database, and a database-aware health route. User registration, social APIs, database schema/migrations and real-time infrastructure are not yet implemented.
+The backend directory now contains the Express API, PostgreSQL connection pool, environment configuration, local Compose database, database-aware health route, a users-table migration, and GitHub-verified account registration/sign-in. Friend/social APIs and real-time infrastructure are not yet implemented.
 
 See [backend/README.md](./backend/README.md) for backend setup and development commands.
 
