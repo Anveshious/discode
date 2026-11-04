@@ -31,6 +31,10 @@ export class AuthManager implements vscode.Disposable {
     constructor(private readonly secretStorage: vscode.SecretStorage) {}
 
     public async initialize(): Promise<void> {
+        if (await this.restoreSession()) {
+            return;
+        }
+
         const storedSession = await this.secretStorage.get(SESSION_SECRET_KEY);
         if (storedSession === undefined) {
             return;
@@ -55,8 +59,23 @@ export class AuthManager implements vscode.Disposable {
             return;
         }
 
-        this.session = session;
-        this.authenticationChangeEmitter.fire(true);
+        this.setSession(session);
+    }
+
+    public async restoreSession(): Promise<boolean> {
+        try {
+            const session = await vscode.authentication.getSession("github", [], {
+                createIfNone: false,
+                silent: true,
+            });
+            if (session) {
+                this.setSession(session);
+                return true;
+            }
+        } catch {
+            // A missing session or unavailable provider is a normal logged-out state.
+        }
+        return false;
     }
 
     public async login(): Promise<vscode.AuthenticationSession> {
@@ -71,8 +90,7 @@ export class AuthManager implements vscode.Disposable {
                 SESSION_SECRET_KEY,
                 JSON.stringify(session)
             );
-            this.session = session;
-            this.authenticationChangeEmitter.fire(true);
+            this.setSession(session);
             vscode.window.showInformationMessage(
                 `Welcome ${session.account.label}!`
             );
@@ -86,8 +104,7 @@ export class AuthManager implements vscode.Disposable {
 
     public async logout(): Promise<void> {
         await this.secretStorage.delete(SESSION_SECRET_KEY);
-        this.session = undefined;
-        this.authenticationChangeEmitter.fire(false);
+        this.setSession(undefined);
     }
 
     public getSession(): vscode.AuthenticationSession | undefined {
@@ -98,8 +115,12 @@ export class AuthManager implements vscode.Disposable {
         return this.session !== undefined;
     }
 
+    private setSession(session: vscode.AuthenticationSession | undefined): void {
+        this.session = session;
+        this.authenticationChangeEmitter.fire(session !== undefined);
+    }
+
     public dispose(): void {
         this.authenticationChangeEmitter.dispose();
     }
-    
 }

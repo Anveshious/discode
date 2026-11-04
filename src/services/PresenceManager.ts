@@ -1,14 +1,14 @@
 import * as vscode from "vscode";
 import {
     isPresenceStatus,
-    PresenceStatus,
+    PresenceStatusValue,
 } from "../models/PresenceStatus";
 
 const PRESENCE_STATUS_KEY = "discode.presenceStatus";
 
 export class PresenceManager implements vscode.Disposable {
-    private status: PresenceStatus = "online";
-    private readonly statusChangeEmitter = new vscode.EventEmitter<PresenceStatus>();
+    private status: PresenceStatusValue = "online";
+    private readonly statusChangeEmitter = new vscode.EventEmitter<PresenceStatusValue>();
     public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
     constructor(private readonly globalState: vscode.Memento) {}
@@ -20,7 +20,7 @@ export class PresenceManager implements vscode.Disposable {
         }
     }
 
-    public async setStatus(status: PresenceStatus): Promise<void> {
+    public async setStatus(status: PresenceStatusValue): Promise<void> {
         if (status === this.status) {
             return;
         }
@@ -30,7 +30,7 @@ export class PresenceManager implements vscode.Disposable {
         this.statusChangeEmitter.fire(status);
     }
 
-    public getStatus(): PresenceStatus {
+    public getStatus(): PresenceStatusValue {
         return this.status;
     }
 

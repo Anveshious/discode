@@ -1,21 +1,12 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../auth/AuthManager";
-import { PresenceManager } from "../services/PresenceManager";
 import { GitHubService } from "../services/GitHubService";
-import {
-    isPresenceStatus,
-    PRESENCE_STATUS_DESCRIPTIONS,
-    PRESENCE_STATUS_LABELS,
-} from "../models/PresenceStatus";
 
 export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
     private readonly githubService: GitHubService;
 
-    constructor(
-        private readonly authManager: AuthManager,
-        private readonly presenceManager: PresenceManager
-    ) {
+    constructor(private readonly authManager: AuthManager) {
         this.githubService = new GitHubService(authManager);
     }
 
@@ -40,7 +31,7 @@ export class OpenDashboard {
         panel.webview.onDidReceiveMessage(async(message) => {
             switch (message.type) {
                 case "webview.ready":
-                    await this.postDashboardState(panel);
+                    await this.postAuthenticationState(panel);
                     break;
                 case "auth.login":
                     try {
@@ -59,22 +50,6 @@ export class OpenDashboard {
                         await vscode.window.showErrorMessage("Unable to load your GitHub profile.");
                     }
                     break;
-                case "presence.update":
-                    if (!this.authManager.isAuthenticated()) {
-                        return;
-                    }
-
-                    if (!isPresenceStatus(message.status)) {
-                        await vscode.window.showErrorMessage("Choose a valid presence status.");
-                        return;
-                    }
-
-                    try {
-                        await this.presenceManager.setStatus(message.status);
-                    } catch {
-                        await vscode.window.showErrorMessage("Unable to save your presence status.");
-                    }
-                    break;
                 case "auth.logout":
                     try {
                         await this.authManager.logout();
@@ -85,32 +60,26 @@ export class OpenDashboard {
             }
         });
 
-        const postDashboardState = () => {
-            void this.postDashboardState(panel).catch((error: unknown) => {
-                console.error("Failed to update dashboard state.", error);
-            });
-        };
         const authStateSubscription = this.authManager.onDidChangeAuthentication(
-            postDashboardState
-        );
-        const presenceSubscription = this.presenceManager.onDidChangeStatus(
-            postDashboardState
+            () => {
+                void this.postAuthenticationState(panel).catch((error: unknown) => {
+                    console.error("Failed to update dashboard authentication state.", error);
+                });
+            }
         );
 
         panel.onDidDispose(() => {
             authStateSubscription.dispose();
-            presenceSubscription.dispose();
             this.panel = undefined;
         });
     }
 
-    private async postDashboardState(panel: vscode.WebviewPanel): Promise<void> {
+    private async postAuthenticationState(panel: vscode.WebviewPanel): Promise<void> {
         const session = this.authManager.getSession();
         await panel.webview.postMessage({
-            type: "dashboard.state",
+            type: "auth.state",
             authenticated: session !== undefined,
             accountLabel: session?.account.label,
-            presence: this.presenceManager.getStatus(),
         });
     }
 
@@ -138,9 +107,6 @@ export class OpenDashboard {
             --btn-secondary-hover: var(--vscode-button-secondaryHoverBackground, #30363d);
             --offline-color: #8b949e;
             --online-color: #3fb950;
-            --idle-color: #d29922;
-            --focused-color: #58a6ff;
-            --contribute-color: #bc8cff;
         }
 
         * {
@@ -161,15 +127,15 @@ export class OpenDashboard {
 
         .dashboard-container {
             width: 100%;
-            max-width: 460px;
-            padding: 24px;
+            max-width: 360px;
+            padding: 20px;
         }
 
         .dashboard-card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 10px;
-            padding: 2rem;
+            padding: 2.5rem 2rem;
             text-align: center;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             position: relative;
@@ -264,60 +230,18 @@ export class OpenDashboard {
             box-shadow: 0 0 10px rgba(63, 185, 80, 0.5);
         }
 
-        .dot.presence-idle {
-            background-color: var(--idle-color);
-        }
-
-        .dot.presence-focused {
-            background-color: var(--focused-color);
-        }
-
-        .dot.presence-open-to-contribute {
-            background-color: var(--contribute-color);
-        }
-
-        .presence-card {
-            padding: 1rem 1.2rem;
-            margin-bottom: 1.5rem;
-            text-align: left;
-            background-color: rgba(0, 0, 0, 0.15);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-        }
-
-        .presence-card label {
-            display: block;
-            margin-bottom: 0.6rem;
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 0.5rem;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
             color: var(--text-muted);
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
         }
 
-        .presence-select {
-            width: 100%;
-            padding: 0.65rem 0.75rem;
+        .stats-container span {
             color: var(--text-main);
-            background-color: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
-            font: inherit;
-        }
-
-        .presence-description {
-            min-height: 2.5em;
-            margin: 0.75rem 0 0;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            line-height: 1.45;
-        }
-
-        .local-note {
-            margin: 0 0 1.25rem;
-            color: var(--text-muted);
-            font-size: 0.78rem;
-            line-height: 1.45;
+            font-weight: 600;
         }
 
         /* Buttons */
@@ -416,25 +340,18 @@ export class OpenDashboard {
                     <span class="profile-name" id="userName">Anne *</span>
                 </div>
 
-                <div class="status-container">
+                <div class="status-container" style="margin-bottom: 1rem;">
                     <span class="status-label">Status</span>
                     <div class="status-indicator">
-                        <span class="dot online" id="presenceDot"></span>
-                        <span id="presenceLabel">Online</span>
+                        <span class="dot online" id="statusDotLoggedIn"></span>
+                        <span id="statusTextLoggedIn">Online</span>
                     </div>
                 </div>
 
-                <div class="presence-card">
-                    <label for="presenceSelect">Set your presence</label>
-                    <select class="presence-select" id="presenceSelect" onchange="changePresence(this.value)">
-                        ${Object.entries(PRESENCE_STATUS_LABELS).map(([status, label]) =>
-        `<option value="${status}">${label}</option>`
-    ).join("")}
-                    </select>
-                    <p class="presence-description" id="presenceDescription"></p>
+                <div class="stats-container">
+                    <span>Friends Online:</span>
+                    <span id="friendsCount">0</span>
                 </div>
-
-                <p class="local-note">Your presence is saved for this VS Code profile. Sharing it with teammates isn’t available yet.</p>
 
                 <button class="btn btn-secondary" onclick="logout()">
                     Sign Out
@@ -447,8 +364,6 @@ export class OpenDashboard {
     <script>
         // Check if running inside VS Code, otherwise fail gracefully so it still works in a standard browser
         const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
-        const presenceLabels = ${JSON.stringify(PRESENCE_STATUS_LABELS)};
-        const presenceDescriptions = ${JSON.stringify(PRESENCE_STATUS_DESCRIPTIONS)};
 
         function login() {
             if (vscode) {
@@ -460,26 +375,6 @@ export class OpenDashboard {
             if (vscode) {
                 vscode.postMessage({ type: "auth.logout" });
             }
-        }
-
-        function changePresence(status) {
-            if (vscode) {
-                vscode.postMessage({ type: "presence.update", status });
-            }
-        }
-
-        function setPresenceState(status) {
-            const label = presenceLabels[status];
-            if (!label) {
-                return;
-            }
-
-            document.getElementById('presenceSelect').value = status;
-            document.getElementById('presenceLabel').textContent = label;
-            document.getElementById('presenceDescription').textContent =
-                presenceDescriptions[status];
-            document.getElementById('presenceDot').className =
-                'dot' + (status === 'online' ? ' online' : ' presence-' + status);
         }
 
         // Logic to swap the screens
@@ -496,18 +391,18 @@ export class OpenDashboard {
             }
         }
 
+        // Optional: Listen for backend state changes (e.g., when the extension first loads)
         window.addEventListener('message', event => {
             const message = event.data;
             if (message.type === 'auth.profile') {
                 document.getElementById('userName').textContent =
                     message.user.name || message.user.login;
-            } else if (message.type === 'dashboard.state') {
+            } else if (message.type === 'auth.state') {
                 setViewState(message.authenticated);
                 if (message.authenticated && message.accountLabel) {
                     document.getElementById('userName').textContent =
                         message.accountLabel;
                 }
-                setPresenceState(message.presence);
             }
         });
 

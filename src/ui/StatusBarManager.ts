@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import {
-  PresenceStatus,
+  PresenceStatusValue,
   PRESENCE_STATUS_LABELS
 } from "../models/PresenceStatus";
 import { StatusBarState } from "../models/StatusBarState";
@@ -15,9 +15,9 @@ export class StatusBarManager implements vscode.Disposable {
     this.statusBar.color = state.color;
   }
 
-  public updatePresence(isAuthenticated: boolean, status: PresenceStatus): void {
+  public updatePresence(isAuthenticated: boolean, status: PresenceStatusValue): void {
     const label = isAuthenticated ? PRESENCE_STATUS_LABELS[status] : "Offline";
-    const colorByStatus: Record<PresenceStatus, string> = {
+    const colorByStatus: Record<PresenceStatusValue, string> = {
       online: "charts.green",
       idle: "charts.orange",
       focused: "charts.blue",
