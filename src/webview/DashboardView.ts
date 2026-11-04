@@ -39,16 +39,6 @@ export class OpenDashboard {
                     } catch {
                         return;
                     }
-
-                    try {
-                        const user = await this.githubService.getCurrentUser();
-                        await panel.webview.postMessage({
-                            type: "auth.profile",
-                            user,
-                        });
-                    } catch {
-                        await vscode.window.showErrorMessage("Unable to load your GitHub profile.");
-                    }
                     break;
                 case "auth.logout":
                     try {
@@ -81,6 +71,31 @@ export class OpenDashboard {
             authenticated: session !== undefined,
             accountLabel: session?.account.label,
         });
+
+        if (!session) {
+            return;
+        }
+
+        try {
+            const user = await this.githubService.getCurrentUser();
+            if (
+                this.panel !== panel
+                || this.authManager.getSession()?.id !== session.id
+                || this.authManager.getSession()?.accessToken !== session.accessToken
+            ) {
+                return;
+            }
+
+            await panel.webview.postMessage({
+                type: "auth.profile",
+                user,
+            });
+        } catch (error) {
+            const message = error instanceof Error
+                ? error.message
+                : "Unable to load your GitHub profile.";
+            await vscode.window.showErrorMessage(message);
+        }
     }
 
     private getHtmlContent(): string {
@@ -172,6 +187,14 @@ export class OpenDashboard {
             display: flex;
             flex-direction: column;
             gap: 4px;
+        }
+
+        .profile-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-bottom: 8px;
         }
 
         .profile-label {
@@ -336,8 +359,13 @@ export class OpenDashboard {
                 </div>
 
                 <div class="profile-card">
-                    <span class="profile-label">GitHub</span>
-                    <span class="profile-name" id="userName">Anne *</span>
+                    <img class="profile-avatar" id="userAvatar" alt="GitHub avatar" hidden />
+                    <span class="profile-label">Display name</span>
+                    <span class="profile-name" id="userName">Loading profile...</span>
+                    <span class="profile-label">GitHub username</span>
+                    <span id="userLogin">—</span>
+                    <span class="profile-label">GitHub ID</span>
+                    <span id="userId">—</span>
                 </div>
 
                 <div class="status-container" style="margin-bottom: 1rem;">
@@ -397,11 +425,25 @@ export class OpenDashboard {
             if (message.type === 'auth.profile') {
                 document.getElementById('userName').textContent =
                     message.user.name || message.user.login;
+                document.getElementById('userLogin').textContent = message.user.login;
+                document.getElementById('userId').textContent =
+                    String(message.user.id);
+                const avatar = document.getElementById('userAvatar');
+                avatar.src = message.user.avatar_url;
+                avatar.hidden = false;
             } else if (message.type === 'auth.state') {
                 setViewState(message.authenticated);
                 if (message.authenticated && message.accountLabel) {
-                    document.getElementById('userName').textContent =
+                    document.getElementById('userLogin').textContent =
                         message.accountLabel;
+                } else if (!message.authenticated) {
+                    document.getElementById('userName').textContent =
+                        'Not signed in';
+                    document.getElementById('userLogin').textContent = '—';
+                    document.getElementById('userId').textContent = '—';
+                    const avatar = document.getElementById('userAvatar');
+                    avatar.removeAttribute('src');
+                    avatar.hidden = true;
                 }
             }
         });

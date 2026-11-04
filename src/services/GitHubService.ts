@@ -2,6 +2,7 @@ import type { AuthManager } from "../auth/AuthManager";
 import type { GitHubUser } from "../models/GitHubUser";
 
 interface GitHubUserResponse {
+    id: number;
     login: string;
     name: string | null;
     avatar_url: string;
@@ -16,7 +17,11 @@ function isGitHubUserResponse(value: unknown): value is GitHubUserResponse {
     }
 
     const user = value as Record<string, unknown>;
-    return typeof user.login === "string"
+    return typeof user.id === "number"
+        && Number.isSafeInteger(user.id)
+        && user.id > 0
+        && typeof user.login === "string"
+        && user.login.length > 0
         && (typeof user.name === "string" || user.name === null)
         && typeof user.avatar_url === "string"
         && typeof user.html_url === "string"
@@ -25,7 +30,9 @@ function isGitHubUserResponse(value: unknown): value is GitHubUserResponse {
 }
 
 export class GitHubService {
-    constructor(private readonly authManager: AuthManager) {}
+    constructor(
+        private readonly authManager: Pick<AuthManager, "getSession" | "handleSessionExpired">
+    ) {}
 
     public async getCurrentUser(): Promise<GitHubUser> {
         const session = this.authManager.getSession();
@@ -47,6 +54,19 @@ export class GitHubService {
         }
 
         if (!response.ok) {
+            if (response.status === 401) {
+                let sessionExpired: boolean;
+                try {
+                    sessionExpired = await this.authManager.handleSessionExpired(session);
+                } catch {
+                    throw new Error(
+                        "Your GitHub session expired. Please sign in again; the sign-out state could not be saved."
+                    );
+                }
+                if (sessionExpired) {
+                    throw new Error("Your GitHub session expired. Please sign in again.");
+                }
+            }
             throw new Error(`GitHub API request failed with status ${response.status}.`);
         }
 
@@ -62,6 +82,7 @@ export class GitHubService {
         }
 
         return {
+            id: user.id,
             login: user.login,
             name: user.name,
             avatar_url: user.avatar_url,

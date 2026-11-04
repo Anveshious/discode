@@ -107,8 +107,10 @@ The project is currently an early-stage VS Code extension prototype.
 
 - [x] TypeScript-based VS Code extension scaffold.
 - [x] GitHub authentication using VS Code's built-in authentication API.
-- [x] Retrieval of the authenticated GitHub account identity.
-- [x] GitHub profile service and profile data model.
+- [x] GitHub username, numeric account ID, avatar and profile retrieval.
+- [x] Use of the numeric GitHub account ID as the stable identity key; usernames are display/search values.
+- [x] Login, local sign-out, session restoration and authentication-provider change handling.
+- [x] Expired-session handling that signs the user out and requests reauthentication.
 - [x] Reusable Discode dashboard opened through `discode.openDashboard`.
 - [x] Status bar presence item.
 - [x] Modular extension structure separating authentication, commands, services, models and UI.
@@ -166,6 +168,8 @@ flowchart TD
 ```
 
 The GitHub authentication provider establishes the user's identity in the extension. The backend must independently verify the identity presented by the extension before creating or accessing a Discode account. The backend then manages Discode-specific data, while the real-time service distributes presence updates to authorized friends.
+
+GitHub usernames can change, so the numeric GitHub account ID is the stable identity key. The username and other profile fields are presentation data, not account keys. Signing out of Discode clears the extension's local authenticated state; the GitHub account itself remains signed in to VS Code.
 
 This is the intended architecture; the backend, database and real-time infrastructure are not yet implemented in the current prototype.
 

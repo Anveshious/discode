@@ -1,100 +1,78 @@
 import * as vscode from "vscode";
 
-const SESSION_SECRET_KEY = "discode.githubSession";
-
-function isAuthenticationSession(value: unknown): value is vscode.AuthenticationSession {
-    if (typeof value !== "object" || value === null) {
-        return false;
-    }
-
-    const session = value as Record<string, unknown>;
-    if (
-        typeof session.id !== "string"
-        || typeof session.accessToken !== "string"
-        || !Array.isArray(session.scopes)
-        || !session.scopes.every((scope) => typeof scope === "string")
-        || typeof session.account !== "object"
-        || session.account === null
-    ) {
-        return false;
-    }
-
-    const account = session.account as Record<string, unknown>;
-    return typeof account.id === "string" && typeof account.label === "string";
-}
+const LEGACY_SESSION_SECRET_KEY = "discode.githubSession";
+const SIGNED_OUT_KEY = "discode.githubSignedOut";
+const REAUTHENTICATION_REQUIRED_KEY = "discode.githubReauthenticationRequired";
 
 export class AuthManager implements vscode.Disposable {
     private session?: vscode.AuthenticationSession;
+    private sessionSyncGeneration = 0;
+    private localSignOutInProgress = false;
     private readonly authenticationChangeEmitter = new vscode.EventEmitter<boolean>();
+    private readonly providerSessionSubscription: vscode.Disposable;
     public readonly onDidChangeAuthentication = this.authenticationChangeEmitter.event;
 
-    constructor(private readonly secretStorage: vscode.SecretStorage) {}
+    constructor(
+        private readonly secretStorage: vscode.SecretStorage,
+        private readonly globalState: vscode.Memento
+    ) {
+        this.providerSessionSubscription = vscode.authentication.onDidChangeSessions((event) => {
+            if (
+                event.provider.id !== "github"
+                || this.localSignOutInProgress
+                || this.globalState.get<boolean>(SIGNED_OUT_KEY, false)
+            ) {
+                return;
+            }
+
+            void this.refreshSession().catch((error: unknown) => {
+                console.error("Failed to refresh the GitHub session.", error);
+                void vscode.window.showErrorMessage(
+                    "Unable to refresh GitHub authentication. Please sign in again."
+                );
+            });
+        });
+    }
 
     public async initialize(): Promise<void> {
-        if (await this.restoreSession()) {
+        await this.secretStorage.delete(LEGACY_SESSION_SECRET_KEY);
+        if (this.globalState.get<boolean>(SIGNED_OUT_KEY, false)) {
             return;
         }
 
-        const storedSession = await this.secretStorage.get(SESSION_SECRET_KEY);
-        if (storedSession === undefined) {
-            return;
-        }
-
-        let session: unknown;
-        try {
-            session = JSON.parse(storedSession);
-        } catch {
-            await this.secretStorage.delete(SESSION_SECRET_KEY);
-            await vscode.window.showErrorMessage(
-                "The saved GitHub session is invalid. Please log in again."
-            );
-            return;
-        }
-
-        if (!isAuthenticationSession(session)) {
-            await this.secretStorage.delete(SESSION_SECRET_KEY);
-            await vscode.window.showErrorMessage(
-                "The saved GitHub session is invalid. Please log in again."
-            );
-            return;
-        }
-
-        this.setSession(session);
+        await this.restoreSession();
     }
 
     public async restoreSession(): Promise<boolean> {
-        try {
-            const session = await vscode.authentication.getSession("github", [], {
-                createIfNone: false,
-                silent: true,
-            });
-            if (session) {
-                this.setSession(session);
-                return true;
-            }
-        } catch {
-            // A missing session or unavailable provider is a normal logged-out state.
+        if (this.globalState.get<boolean>(SIGNED_OUT_KEY, false)) {
+            this.setSession(undefined);
+            return false;
         }
-        return false;
+
+        try {
+            return await this.refreshSession();
+        } catch {
+            return false;
+        }
     }
 
     public async login(): Promise<vscode.AuthenticationSession> {
         try {
-            const session = await vscode.authentication.getSession(
-                "github",
-                ["user:email"],
-                { createIfNone: true }
+            const requiresReauthentication = this.globalState.get<boolean>(
+                REAUTHENTICATION_REQUIRED_KEY,
+                false
             );
+            const session = await vscode.authentication.getSession("github", [], requiresReauthentication
+                ? { forceNewSession: true }
+                : { createIfNone: true });
+            if (!session) {
+                throw new Error("GitHub authentication did not return a session.");
+            }
 
-            await this.secretStorage.store(
-                SESSION_SECRET_KEY,
-                JSON.stringify(session)
-            );
+            await this.globalState.update(SIGNED_OUT_KEY, false);
+            await this.globalState.update(REAUTHENTICATION_REQUIRED_KEY, false);
             this.setSession(session);
-            vscode.window.showInformationMessage(
-                `Welcome ${session.account.label}!`
-            );
-
+            vscode.window.showInformationMessage(`Welcome ${session.account.label}!`);
             return session;
         } catch (error) {
             vscode.window.showErrorMessage("Failed to login with GitHub");
@@ -103,8 +81,35 @@ export class AuthManager implements vscode.Disposable {
     }
 
     public async logout(): Promise<void> {
-        await this.secretStorage.delete(SESSION_SECRET_KEY);
-        this.setSession(undefined);
+        this.localSignOutInProgress = true;
+        this.sessionSyncGeneration++;
+        try {
+            await this.globalState.update(SIGNED_OUT_KEY, true);
+            await this.globalState.update(REAUTHENTICATION_REQUIRED_KEY, false);
+        } finally {
+            this.setSession(undefined);
+            this.localSignOutInProgress = false;
+        }
+    }
+
+    public async handleSessionExpired(session: vscode.AuthenticationSession): Promise<boolean> {
+        if (
+            this.session?.id !== session.id
+            || this.session.accessToken !== session.accessToken
+        ) {
+            return false;
+        }
+
+        this.localSignOutInProgress = true;
+        this.sessionSyncGeneration++;
+        try {
+            await this.globalState.update(SIGNED_OUT_KEY, true);
+            await this.globalState.update(REAUTHENTICATION_REQUIRED_KEY, true);
+            return true;
+        } finally {
+            this.setSession(undefined);
+            this.localSignOutInProgress = false;
+        }
     }
 
     public getSession(): vscode.AuthenticationSession | undefined {
@@ -115,12 +120,45 @@ export class AuthManager implements vscode.Disposable {
         return this.session !== undefined;
     }
 
+    private async refreshSession(): Promise<boolean> {
+        const generation = ++this.sessionSyncGeneration;
+        let session: vscode.AuthenticationSession | undefined;
+        try {
+            session = await vscode.authentication.getSession("github", [], {
+                createIfNone: false,
+                silent: true,
+            });
+        } catch (error) {
+            if (generation === this.sessionSyncGeneration) {
+                this.setSession(undefined);
+            }
+            throw error;
+        }
+
+        if (generation !== this.sessionSyncGeneration) {
+            return this.isAuthenticated();
+        }
+
+        this.setSession(session);
+        return session !== undefined;
+    }
+
     private setSession(session: vscode.AuthenticationSession | undefined): void {
+        if (
+            this.session?.id === session?.id
+            && this.session?.accessToken === session?.accessToken
+            && this.session?.account.id === session?.account.id
+            && this.session?.account.label === session?.account.label
+        ) {
+            return;
+        }
+
         this.session = session;
         this.authenticationChangeEmitter.fire(session !== undefined);
     }
 
     public dispose(): void {
+        this.providerSessionSubscription.dispose();
         this.authenticationChangeEmitter.dispose();
     }
 }

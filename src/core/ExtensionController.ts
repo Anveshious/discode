@@ -13,7 +13,7 @@ export class ExtensionController implements vscode.Disposable {
     private readonly presenceSubscription: vscode.Disposable;
 
     constructor(context: vscode.ExtensionContext) {
-        this.authManager = new AuthManager(context.secrets);
+        this.authManager = new AuthManager(context.secrets, context.globalState);
         this.presenceManager = new PresenceManager(context.globalState);
         this.statusBar = new StatusBarManager();
         this.commandManager = new CommandManager(this.authManager, this.presenceManager);
