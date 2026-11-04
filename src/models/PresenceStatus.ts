@@ -8,9 +8,11 @@ export const PRESENCE_STATUSES = [
 export type PresenceStatusValue = typeof PRESENCE_STATUSES[number];
 
 export type PresenceActivity = "active" | "idle" | "offline";
+export type ManualPresenceStatus = "online" | "focused" | "open-to-contribute";
 
 export interface PresenceStatus {
     status: PresenceActivity;
+    isWindowFocused: boolean;
 
     /** Basename only, e.g. "ExtensionController.ts" - never a full path. */
     fileName?: string;

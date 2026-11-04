@@ -113,6 +113,8 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Expired-session handling that signs the user out and requests reauthentication.
 - [x] Reusable Discode dashboard opened through `discode.openDashboard`.
 - [x] Status bar presence item.
+- [x] Detect active editor usage, inactivity-to-Idle transitions, and VS Code focus loss.
+- [x] Manual Focused and Open to Contribute overrides, stored separately from automatic activity.
 - [x] Modular extension structure separating authentication, commands, services, models and UI.
 - [x] Initial presence-status definitions, including Online, Idle, Focused and Open to Contribute.
 - [x] Local presence tracking groundwork.
@@ -120,7 +122,7 @@ The project is currently an early-stage VS Code extension prototype.
 ### In Progress / Needs Integration
 
 - [ ] Finalize the dashboard experience and connect all UI states to extension services.
-- [ ] Complete and verify automatic local presence transitions.
+- [ ] Synchronize automatic and manual presence with the backend.
 - [ ] Establish the backend contract and connect the extension to it.
 - [ ] Define persistent Discode user registration and identity verification.
 
@@ -139,6 +141,8 @@ The project is currently an early-stage VS Code extension prototype.
 - [ ] Testing, packaging and eventual Marketplace release.
 
 > **Status note:** The checklist reflects the current project baseline. A local status model or tracker does not mean that friends can already see one another's presence. Cross-user functionality requires the backend and real-time service.
+
+Automatic presence detects editor activity and VS Code focus locally. After five minutes without editor activity, or when VS Code loses focus, activity becomes Idle. Selecting Focused or Open to Contribute sets a separate manual override; choosing Automatic returns to the activity-derived Online/Idle state.
 
 ---
 

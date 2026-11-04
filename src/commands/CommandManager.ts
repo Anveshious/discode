@@ -11,7 +11,7 @@ export class CommandManager implements vscode.Disposable {
         private readonly authManager: AuthManager,
         private readonly presenceManager: PresenceManager
     ) {
-        this.dashboardView = new OpenDashboard(this.authManager);
+        this.dashboardView = new OpenDashboard(this.authManager, this.presenceManager);
 
         const openDashboard = vscode.commands.registerCommand("discode.openDashboard", () => {
             this.dashboardView.show();

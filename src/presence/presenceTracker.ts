@@ -18,6 +18,7 @@ export class PresenceTracker implements vscode.Disposable {
         this.idleThresholdMs = idleThresholdMs;
         this.current = {
             status: "offline",
+            isWindowFocused: vscode.window.state.focused,
             updatedAt: Date.now(),
         };
 
@@ -25,7 +26,11 @@ export class PresenceTracker implements vscode.Disposable {
             vscode.window.onDidChangeActiveTextEditor((editor) => this.handleEditorChange(editor)),
             vscode.window.onDidChangeWindowState((state) => this.handleWindowStateChange(state)),
             vscode.window.onDidChangeTextEditorSelection(() => this.markActive()),
-            vscode.workspace.onDidChangeTextDocument(() => this.markActive())
+            vscode.workspace.onDidChangeTextDocument((event) => {
+                if (event.document === vscode.window.activeTextEditor?.document) {
+                    this.markActive();
+                }
+            })
         );
 
         // Seed from whatever is active right now.
@@ -37,24 +42,23 @@ export class PresenceTracker implements vscode.Disposable {
     }
 
     private handleWindowStateChange(state: vscode.WindowState): void {
+        if (this.current.isWindowFocused !== state.focused) {
+            this.update({ ...this.current, isWindowFocused: state.focused });
+        }
+
         if (state.focused) {
             this.markActive();
         } else {
-            // Losing focus doesn't necessarily mean idle (could be a quick
-            // alt-tab to check docs), but we don't want to claim "active"
-            // while the editor isn't in front of the user either. Start the
-            // idle countdown immediately rather than waiting for the next
-            // keystroke that will never come while unfocused.
-            this.scheduleIdle();
+            this.clearIdleTimer();
+            this.update({ ...this.current, status: "idle" });
         }
     }
 
     private handleEditorChange(editor: vscode.TextEditor | undefined): void {
-        if (!editor || editor.document.uri.scheme !== "file") {
-            // Output panels, debug consoles, untitled scratch buffers, etc.
-            // are not meaningful presence signals - don't publish their names.
+        if (!editor) {
             this.update({
-                status: this.current.status === "offline" ? "offline" : "active",
+                status: "offline",
+                isWindowFocused: this.current.isWindowFocused,
                 fileName: undefined,
                 languageId: undefined,
                 workspaceName: this.currentWorkspaceName(),
@@ -63,30 +67,67 @@ export class PresenceTracker implements vscode.Disposable {
             return;
         }
 
+        if (editor.document.uri.scheme !== "file") {
+            this.update({
+                status: this.current.isWindowFocused ? "active" : "idle",
+                isWindowFocused: this.current.isWindowFocused,
+                fileName: undefined,
+                languageId: undefined,
+                workspaceName: undefined,
+                gitBranch: undefined,
+            });
+            this.scheduleIdle();
+            return;
+        }
+
         this.update({
-            status: "active",
+            status: this.current.isWindowFocused ? "active" : "idle",
+            isWindowFocused: this.current.isWindowFocused,
             fileName: path.basename(editor.document.uri.fsPath),
             languageId: editor.document.languageId,
             workspaceName: this.currentWorkspaceName(editor.document.uri),
             gitBranch: this.readGitBranch(editor.document.uri),
         });
-        this.scheduleIdle();
+        if (this.current.isWindowFocused) {
+            this.scheduleIdle();
+        }
     }
 
     private markActive(): void {
-        if (this.current.status !== "active") {
-            this.update({ ...this.current, status: "active" });
+        if (!this.current.isWindowFocused) {
+            return;
         }
-        this.scheduleIdle();
+
+        if (this.current.status !== "active") {
+            this.update({
+                ...this.current,
+                status: this.hasActiveEditor() ? "active" : "offline",
+            });
+        }
+        if (this.current.status === "active") {
+            this.scheduleIdle();
+        }
     }
 
     private scheduleIdle(): void {
-        if (this.idleTimer) {
-            clearTimeout(this.idleTimer);
+        this.clearIdleTimer();
+        if (!this.current.isWindowFocused || this.current.status !== "active") {
+            return;
         }
         this.idleTimer = setTimeout(() => {
             this.update({ ...this.current, status: "idle" });
         }, this.idleThresholdMs);
+    }
+
+    private clearIdleTimer(): void {
+        if (this.idleTimer) {
+            clearTimeout(this.idleTimer);
+            this.idleTimer = undefined;
+        }
+    }
+
+    private hasActiveEditor(): boolean {
+        return vscode.window.activeTextEditor !== undefined;
     }
 
     private currentWorkspaceName(uri?: vscode.Uri): string | undefined {
@@ -110,9 +151,7 @@ export class PresenceTracker implements vscode.Disposable {
     }
 
     public dispose(): void {
-        if (this.idleTimer) {
-            clearTimeout(this.idleTimer);
-        }
+        this.clearIdleTimer();
         this.disposables.forEach((d) => d.dispose());
         this.onDidChangeEmitter.dispose();
     }

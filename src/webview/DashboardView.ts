@@ -1,12 +1,23 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../auth/AuthManager";
 import { GitHubService } from "../services/GitHubService";
+import { ManualPresenceStatus } from "../models/PresenceStatus";
+import { PresenceManager } from "../services/PresenceManager";
+
+function isManualPresenceStatus(value: unknown): value is ManualPresenceStatus {
+    return value === "online"
+        || value === "focused"
+        || value === "open-to-contribute";
+}
 
 export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
     private readonly githubService: GitHubService;
 
-    constructor(private readonly authManager: AuthManager) {
+    constructor(
+        private readonly authManager: AuthManager,
+        private readonly presenceManager: PresenceManager
+    ) {
         this.githubService = new GitHubService(authManager);
     }
 
@@ -32,6 +43,7 @@ export class OpenDashboard {
             switch (message.type) {
                 case "webview.ready":
                     await this.postAuthenticationState(panel);
+                    await this.postPresenceState(panel);
                     break;
                 case "auth.login":
                     try {
@@ -47,6 +59,18 @@ export class OpenDashboard {
                         await vscode.window.showErrorMessage("Unable to sign out of GitHub.");
                     }
                     break;
+                case "presence.setManualStatus":
+                    if (!isManualPresenceStatus(message.status)) {
+                        await vscode.window.showErrorMessage("Choose a valid presence status.");
+                        return;
+                    }
+
+                    try {
+                        await this.presenceManager.setManualStatus(message.status);
+                    } catch {
+                        await vscode.window.showErrorMessage("Unable to save your presence status.");
+                    }
+                    break;
             }
         });
 
@@ -57,10 +81,24 @@ export class OpenDashboard {
                 });
             }
         );
+        const presenceSubscription = this.presenceManager.onDidChangeStatus(() => {
+            void this.postPresenceState(panel).catch((error: unknown) => {
+                console.error("Failed to update dashboard presence state.", error);
+            });
+        });
 
         panel.onDidDispose(() => {
             authStateSubscription.dispose();
+            presenceSubscription.dispose();
             this.panel = undefined;
+        });
+    }
+
+    private async postPresenceState(panel: vscode.WebviewPanel): Promise<void> {
+        await panel.webview.postMessage({
+            type: "presence.state",
+            status: this.presenceManager.getStatus(),
+            manualStatus: this.presenceManager.getManualStatus(),
         });
     }
 
@@ -267,6 +305,17 @@ export class OpenDashboard {
             font-weight: 600;
         }
 
+        .presence-select {
+            width: 100%;
+            margin: 0 0 1.5rem;
+            padding: 0.65rem;
+            color: var(--text-main);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            font: inherit;
+        }
+
         /* Buttons */
         .btn {
             border: 1px solid transparent;
@@ -376,6 +425,13 @@ export class OpenDashboard {
                     </div>
                 </div>
 
+                <label class="profile-label" for="manualStatus">Your status</label>
+                <select class="presence-select" id="manualStatus" onchange="setManualStatus(this.value)">
+                    <option value="online">Automatic (Online / Idle)</option>
+                    <option value="focused">Focused</option>
+                    <option value="open-to-contribute">Open to Contribute</option>
+                </select>
+
                 <div class="stats-container">
                     <span>Friends Online:</span>
                     <span id="friendsCount">0</span>
@@ -402,6 +458,12 @@ export class OpenDashboard {
         function logout() {
             if (vscode) {
                 vscode.postMessage({ type: "auth.logout" });
+            }
+        }
+
+        function setManualStatus(status) {
+            if (vscode) {
+                vscode.postMessage({ type: "presence.setManualStatus", status });
             }
         }
 
@@ -445,6 +507,15 @@ export class OpenDashboard {
                     avatar.removeAttribute('src');
                     avatar.hidden = true;
                 }
+            } else if (message.type === 'presence.state') {
+                const status = message.status;
+                document.getElementById('statusTextLoggedIn').textContent =
+                    status === 'open-to-contribute'
+                        ? 'Open to Contribute'
+                        : status.charAt(0).toUpperCase() + status.slice(1);
+                const statusDot = document.getElementById('statusDotLoggedIn');
+                statusDot.classList.toggle('online', status !== 'idle');
+                document.getElementById('manualStatus').value = message.manualStatus;
             }
         });
 
