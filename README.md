@@ -181,6 +181,8 @@ The backend directory now contains the Express API, PostgreSQL connection pool, 
 
 See [backend/README.md](./backend/README.md) for backend setup and development commands.
 
+The extension's dedicated API service sends the current VS Code GitHub session as a bearer token when synchronizing the account through `POST /api/auth/github`. The API service reports network, server, invalid-response and authentication errors rather than treating failed requests as success.
+
 ---
 
 ## Development Roadmap

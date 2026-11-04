@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
 import type { AuthManager } from "../auth/AuthManager";
+import { ApiError, ApiService } from "./ApiService";
 
 export interface DiscodeProfile {
     id: string;
@@ -48,86 +48,37 @@ function isDiscodeProfile(value: unknown): value is DiscodeProfile {
         && !Array.isArray(profile.preferences);
 }
 
-function getBackendUrl(): URL {
-    const configuredUrl = vscode.workspace.getConfiguration("discode").get<string>(
-        "backendUrl",
-        "http://localhost:3000"
-    );
-    let url: URL;
-    try {
-        url = new URL(configuredUrl);
-    } catch {
-        throw new Error("The Discode backend URL is invalid.");
-    }
-
-    const isLocalHttp = url.protocol === "http:"
-        && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-    if (url.protocol !== "https:" && !isLocalHttp) {
-        throw new Error("The Discode backend must use HTTPS except on localhost.");
-    }
-    if (url.username || url.password) {
-        throw new Error("The Discode backend URL must not contain credentials.");
-    }
-
-    return new URL("/api/auth/github", url);
+function isSignInResponse(value: unknown): value is SignInResponse {
+    return typeof value === "object"
+        && value !== null
+        && typeof (value as Record<string, unknown>).created === "boolean"
+        && isDiscodeProfile((value as Record<string, unknown>).user);
 }
 
 export class DiscodeService {
+    private readonly api: ApiService;
+
     constructor(
         private readonly authManager: Pick<AuthManager, "getSession" | "handleSessionExpired">
-    ) {}
+    ) {
+        this.api = new ApiService(this.authManager);
+    }
 
     public async signIn(): Promise<SignInResponse> {
-        const session = this.authManager.getSession();
-        if (!session) {
-            throw new Error("GitHub authentication is required to sign in to Discode.");
-        }
-
-        let response: Response;
-        try {
-            response = await fetch(getBackendUrl(), {
-                method: "POST",
-                headers: {
-                    Accept: "application/json",
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${session.accessToken}`,
-                },
-                body: "{}",
-            });
-        } catch {
-            throw new Error("Unable to reach the Discode backend.");
-        }
-
-        let result: unknown;
-        try {
-            result = await response.json();
-        } catch {
-            throw new Error("The Discode backend returned an invalid response.");
-        }
-
-        if (response.status === 401) {
-            const error = typeof result === "object" && result !== null
-                ? (result as Record<string, unknown>).error
-                : undefined;
-            if (error === "invalid_github_token") {
-                await this.authManager.handleSessionExpired(session);
-                throw new Error("Your GitHub session expired. Please sign in again.");
-            }
-            throw new Error("GitHub authentication is required to sign in to Discode.");
-        }
-        if (!response.ok) {
-            throw new Error("The Discode backend could not sign you in.");
-        }
-
-        if (
-            typeof result !== "object"
-            || result === null
-            || typeof (result as Record<string, unknown>).created !== "boolean"
-            || !isDiscodeProfile((result as Record<string, unknown>).user)
-        ) {
+        const result = await this.api.post("api/auth/github", {});
+        if (!isSignInResponse(result)) {
             throw new Error("The Discode backend returned an invalid profile.");
         }
 
-        return result as SignInResponse;
+        const session = this.authManager.getSession();
+        if (session && result.user.githubId !== session.account.id) {
+            throw new ApiError(
+                "The Discode profile does not match the authenticated GitHub account.",
+                502,
+                "github_identity_mismatch"
+            );
+        }
+
+        return result;
     }
 }
