@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `.gitignore`, `.vscodeignore`, `LICENSE.md`, `README.md`, `backend/.vscodeignore`, and 2 more
 - Staged paths: `src/webview/DashboardView.ts`
 - Staged paths: `src/webview/DashboardView.ts`
 - Staged paths: `backend/.env.example`, `backend/README.md`, `backend/src/app.js`, `backend/src/config/env.js`, `backend/test/auth.test.js`, and 4 more

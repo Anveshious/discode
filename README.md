@@ -317,3 +317,7 @@ Features will be marked complete only after they are implemented and tested, not
 Discode is actively being developed. The current repository represents an evolving prototype, and the planned architecture and feature set may change as implementation progresses.
 
 **Built for developers, by developers.**
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE.md) for details.
