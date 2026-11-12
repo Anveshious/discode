@@ -146,420 +146,670 @@ export class OpenDashboard {
     <title>Discode Dashboard</title>
     <style>
         :root {
-            --bg-color: var(--vscode-editor-background, #0d1117);
-            --card-bg: var(--vscode-sideBar-background, #161b22);
-            --surface-raised: var(--vscode-editorWidget-background, #1c2128);
-            --border-color: var(--vscode-widget-border, #30363d);
-            --text-main: var(--vscode-editor-foreground, #c9d1d9);
-            --text-muted: var(--vscode-descriptionForeground, #8b949e);
-            --accent-color: var(--vscode-focusBorder, #58a6ff);
-            --btn-bg: var(--vscode-button-background, #238636);
-            --btn-fg: var(--vscode-button-foreground, #ffffff);
-            --btn-hover: var(--vscode-button-hoverBackground, #2ea043);
-            --btn-secondary: var(--vscode-button-secondaryBackground, #21262d);
-            --btn-secondary-fg: var(--vscode-button-secondaryForeground, #c9d1d9);
-            --btn-secondary-hover: var(--vscode-button-secondaryHoverBackground, #30363d);
-            --offline-color: #8b949e;
-            --online-color: #3fb950;
+            /* Foundation tokens: derived from VS Code theme variables, dark-first fallbacks. */
+            --dc-bg: var(--vscode-editor-background, #0f1115);
+            --dc-fg: var(--vscode-foreground, #d4d7dd);
+            --dc-muted: var(--vscode-descriptionForeground, #8b919c);
+            --dc-rail: color-mix(in srgb, var(--dc-bg) 92%, var(--dc-fg) 8%);
+            --dc-surface: color-mix(in srgb, var(--dc-bg) 94%, var(--dc-fg) 6%);
+            --dc-raised: color-mix(in srgb, var(--dc-bg) 88%, var(--dc-fg) 12%);
+            --dc-hover: color-mix(in srgb, var(--dc-bg) 82%, var(--dc-fg) 18%);
+            --dc-border: var(--vscode-widget-border, color-mix(in srgb, var(--dc-fg) 16%, transparent));
+            --dc-focus: var(--vscode-focusBorder, #4cc9b0);
+
+            /* Brand identity */
+            --dc-brand-a: #2dd4bf;
+            --dc-brand-b: #8b5cf6;
+            --dc-brand-gradient: linear-gradient(135deg, var(--dc-brand-a), var(--dc-brand-b));
+
+            /* Presence colours */
+            --st-online: var(--vscode-charts-green, #3fb950);
+            --st-idle: var(--vscode-charts-yellow, #d29922);
+            --st-focused: var(--vscode-charts-purple, #a371f7);
+            --st-contribute: var(--vscode-charts-blue, #2dd4bf);
+            --st-offline: var(--dc-muted);
+
+            --radius: 12px;
+            --radius-sm: 8px;
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-5: 24px;
+            --space-6: 32px;
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
+
+        html, body { height: 100%; }
 
         body {
             margin: 0;
-            padding: 24px;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            min-height: 100vh;
-            background-color: var(--bg-color);
-            font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
-            color: var(--text-main);
-        }
-
-        .dashboard-container {
-            width: 100%;
-            max-width: 720px;
-            margin: auto;
-        }
-
-        .dashboard-card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: clamp(20px, 4vw, 36px);
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
-        }
-
-        .dashboard-card::before {
-            position: absolute;
-            inset: 0 0 auto;
-            height: 3px;
-            background: linear-gradient(90deg, var(--accent-color), var(--btn-bg));
-            content: "";
-        }
-
-        .view-section {
-            width: 100%;
-            max-width: 560px;
-            margin: 0 auto;
-        }
-
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .brand-mark {
-            width: 48px;
-            height: 48px;
-            flex: 0 0 48px;
-            display: grid;
-            place-items: center;
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            background: var(--surface-raised);
-            color: var(--accent-color);
-            font-size: 20px;
-            font-weight: 800;
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 0.82rem;
-            font-weight: 700;
-            letter-spacing: 0.18em;
-            color: var(--text-main);
-        }
-
-        .header p {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-            margin: 6px 0 0;
+            color: var(--dc-fg);
+            background: var(--dc-bg);
+            font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+            font-size: var(--vscode-font-size, 13px);
             line-height: 1.5;
         }
 
-        .profile-card {
+        .hidden { display: none !important; }
+
+        /* ---------- Shell ---------- */
+        .app {
             display: grid;
-            grid-template-columns: 64px minmax(0, 1fr) auto;
-            align-items: center;
-            gap: 12px 16px;
-            background-color: var(--surface-raised);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 18px;
-            margin-bottom: 16px;
+            grid-template-columns: 64px minmax(0, 1fr) 300px;
+            grid-template-areas: "rail main aside";
+            min-height: 100vh;
         }
 
-        .profile-avatar {
-            width: 56px;
-            height: 56px;
-            grid-row: span 2;
+        /* ---------- Rail ---------- */
+        .rail {
+            grid-area: rail;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-4) 0;
+            background: var(--dc-rail);
+            border-right: 1px solid var(--dc-border);
+        }
+
+        .brand-mark {
+            width: 40px;
+            height: 40px;
+            display: grid;
+            place-items: center;
+            margin-bottom: var(--space-3);
+            border-radius: 12px;
+            background: var(--dc-brand-gradient);
+            color: #fff;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            box-shadow: 0 4px 14px color-mix(in srgb, var(--dc-brand-b) 35%, transparent);
+        }
+
+        .rail-nav {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+
+        .nav-btn {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            display: grid;
+            place-items: center;
+            padding: 0;
+            color: var(--dc-muted);
+            background: transparent;
+            border: 0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background-color 0.15s ease, color 0.15s ease, border-radius 0.15s ease;
+        }
+
+        .nav-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            background: var(--dc-hover);
+            color: var(--dc-fg);
+            border-radius: 9px;
+        }
+
+        .nav-btn.active {
+            background: var(--dc-raised);
+            color: var(--dc-fg);
+        }
+
+        .nav-btn.active::before {
+            content: "";
+            position: absolute;
+            left: -12px;
+            top: 10px;
+            bottom: 10px;
+            width: 3px;
+            border-radius: 0 3px 3px 0;
+            background: var(--dc-brand-gradient);
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* ---------- Main ---------- */
+        .main {
+            grid-area: main;
+            min-width: 0;
+            padding: var(--space-6);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-5);
+        }
+
+        .page-header h1 {
+            margin: 0;
+            font-size: 1.6em;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .page-header p {
+            margin: var(--space-1) 0 0;
+            color: var(--dc-muted);
+        }
+
+        .view {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+            width: 100%;
+            max-width: 760px;
+        }
+
+        /* ---------- Cards ---------- */
+        .card {
+            background: var(--dc-surface);
+            border: 1px solid var(--dc-border);
+            border-radius: var(--radius);
+            padding: var(--space-5);
+            transition: border-color 0.15s ease;
+        }
+
+        .card:hover {
+            border-color: color-mix(in srgb, var(--dc-fg) 28%, transparent);
+        }
+
+        .eyebrow {
+            display: block;
+            color: var(--dc-muted);
+            font-size: 0.72em;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .card-title {
+            margin: var(--space-1) 0 0;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        /* ---------- Hero / profile ---------- */
+        .hero {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .hero-banner {
+            height: 88px;
+            background:
+                radial-gradient(circle at 20% 120%, color-mix(in srgb, var(--dc-brand-a) 55%, transparent), transparent 60%),
+                radial-gradient(circle at 85% -20%, color-mix(in srgb, var(--dc-brand-b) 60%, transparent), transparent 55%),
+                var(--dc-raised);
+        }
+
+        .hero-body {
+            display: flex;
+            align-items: flex-end;
+            gap: var(--space-4);
+            padding: 0 var(--space-5) var(--space-5);
+            margin-top: -36px;
+        }
+
+        .avatar-wrap {
+            position: relative;
+            flex: 0 0 auto;
+        }
+
+        .avatar {
+            display: block;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
             object-fit: cover;
-            border: 2px solid var(--border-color);
-            background: var(--card-bg);
+            background: var(--dc-raised);
+            border: 4px solid var(--dc-surface);
+            box-shadow: 0 0 0 2px var(--ring, var(--st-online));
         }
 
-        .profile-label {
-            color: var(--text-muted);
-            font-size: 0.68rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            font-weight: 600;
+        .avatar-badge {
+            position: absolute;
+            right: 2px;
+            bottom: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--ring, var(--st-online));
+            border: 3px solid var(--dc-surface);
         }
 
-        .profile-name {
-            display: block;
-            margin-top: 4px;
-            font-size: 1.05rem;
-            font-weight: 600;
-            color: var(--text-main);
+        .hero-text { min-width: 0; padding-bottom: var(--space-1); }
+
+        .hero-name {
+            margin: 0;
+            font-size: 1.35em;
+            font-weight: 700;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .profile-login {
-            display: block;
-            margin-top: 3px;
-            color: var(--text-muted);
-            font-size: 0.85rem;
+        .hero-meta {
+            color: var(--dc-muted);
+            font-size: 0.92em;
         }
 
-        .profile-id {
-            display: grid;
-            gap: 5px;
-            align-content: center;
-            min-height: 48px;
-            padding-left: 18px;
-            border-left: 1px solid var(--border-color);
-        }
+        .hero-meta .sep { margin: 0 var(--space-2); opacity: 0.6; }
 
-        .profile-id-value {
-            color: var(--text-main);
-            font-size: 0.85rem;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .status-container {
-            background-color: var(--surface-raised);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 16px;
+        /* ---------- Presence ---------- */
+        .presence-head {
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            align-items: center;
-            gap: 12px;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
         }
 
-        .status-label {
-            color: var(--text-muted);
-            font-size: 0.68rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            font-weight: 600;
-        }
-
-        .status-indicator {
-            display: flex;
+        .status-pill {
+            display: inline-flex;
             align-items: center;
-            gap: 9px;
+            gap: var(--space-2);
+            padding: 4px 12px;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.92em;
+            background: var(--dc-raised);
+            border: 1px solid var(--dc-border);
+            border-radius: 999px;
         }
 
         .dot {
+            --dot: var(--st-offline);
             width: 9px;
             height: 9px;
             border-radius: 50%;
-            display: inline-block;
-            background-color: var(--offline-color);
-            box-shadow: 0 0 0 4px color-mix(in srgb, var(--offline-color) 15%, transparent);
+            background: var(--dot);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot) 22%, transparent);
             transition: background-color 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .dot.online {
-            background-color: var(--online-color);
-            box-shadow: 0 0 0 4px color-mix(in srgb, var(--online-color) 16%, transparent);
+        [data-status="online"]  { --dot: var(--st-online);     --ring: var(--st-online); }
+        [data-status="idle"]    { --dot: var(--st-idle);       --ring: var(--st-idle); }
+        [data-status="focused"] { --dot: var(--st-focused);    --ring: var(--st-focused); }
+        [data-status="open-to-contribute"] { --dot: var(--st-contribute); --ring: var(--st-contribute); }
+        [data-status="offline"] { --dot: var(--st-offline);    --ring: var(--st-offline); }
+
+        .segmented {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: var(--space-2);
         }
 
-        .stats-container {
+        .seg-btn {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 14px 2px 18px;
-            margin-bottom: 4px;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-
-        .stats-container span {
-            color: var(--text-main);
-            font-weight: 600;
-        }
-
-        .presence-label {
-            display: block;
-            margin: 18px 0 8px;
-        }
-
-        .presence-select {
-            width: 100%;
-            margin: 0 0 18px;
-            padding: 11px 12px;
-            color: var(--text-main);
-            background: var(--surface-raised);
-            border: 1px solid var(--border-color);
-            border-radius: 9px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            padding: var(--space-3);
+            text-align: left;
             font: inherit;
+            color: var(--dc-fg);
+            background: var(--dc-raised);
+            border: 1px solid var(--dc-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
         }
 
+        .seg-btn:hover {
+            background: var(--dc-hover);
+            transform: translateY(-1px);
+        }
+
+        .seg-btn[aria-pressed="true"] {
+            border-color: var(--dc-focus);
+            background: color-mix(in srgb, var(--dc-focus) 14%, var(--dc-raised));
+        }
+
+        .seg-title { font-weight: 600; }
+        .seg-desc { color: var(--dc-muted); font-size: 0.85em; }
+
+        /* ---------- Stats ---------- */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: var(--space-4);
+        }
+
+        .stat-value {
+            display: block;
+            margin-top: var(--space-1);
+            font-size: 1.8em;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ---------- Buttons ---------- */
         .btn {
-            border: 1px solid transparent;
-            padding: 12px 16px;
-            border-radius: 9px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            font-family: inherit;
+            gap: var(--space-2);
+            padding: 9px 18px;
+            font: inherit;
+            font-weight: 600;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background-color 0.15s ease, transform 0.15s ease, filter 0.15s ease;
         }
 
         .btn-primary {
-            background-color: var(--btn-bg);
-            color: var(--btn-fg);
-            border-color: var(--btn-bg);
+            color: #fff;
+            background: var(--dc-brand-gradient);
         }
 
         .btn-primary:hover {
-            background-color: var(--btn-hover);
-            border-color: var(--btn-hover);
+            filter: brightness(1.1);
             transform: translateY(-1px);
         }
 
         .btn-secondary {
-            background-color: var(--btn-secondary);
-            color: var(--btn-secondary-fg);
-            border-color: var(--border-color);
+            color: var(--dc-fg);
+            background: var(--dc-raised);
+            border-color: var(--dc-border);
         }
 
-        .btn-secondary:hover {
-            background-color: var(--btn-secondary-hover);
+        .btn-secondary:hover { background: var(--dc-hover); }
+
+        .btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+        .actions { display: flex; justify-content: flex-end; }
+
+        /* ---------- Welcome (logged out) ---------- */
+        .welcome {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: var(--space-4);
+            padding: var(--space-6);
+            background:
+                radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--dc-brand-b) 22%, transparent), transparent 55%),
+                radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--dc-brand-a) 16%, transparent), transparent 55%),
+                var(--dc-surface);
         }
 
+        .welcome h2 { margin: 0; font-size: 1.5em; letter-spacing: -0.01em; }
+        .welcome p { margin: 0; color: var(--dc-muted); max-width: 46ch; }
+
+        /* ---------- Aside ---------- */
+        .aside {
+            grid-area: aside;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+            padding: var(--space-6) var(--space-5);
+            background: var(--dc-rail);
+            border-left: 1px solid var(--dc-border);
+            min-width: 0;
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-3);
+        }
+
+        .badge {
+            min-width: 22px;
+            padding: 1px 8px;
+            text-align: center;
+            font-size: 0.8em;
+            font-weight: 600;
+            color: var(--dc-muted);
+            background: var(--dc-raised);
+            border-radius: 999px;
+        }
+
+        .panel {
+            padding: var(--space-4);
+            background: var(--dc-surface);
+            border: 1px solid var(--dc-border);
+            border-radius: var(--radius);
+        }
+
+        .empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-5) var(--space-3);
+            text-align: center;
+            color: var(--dc-muted);
+            border: 1px dashed var(--dc-border);
+            border-radius: var(--radius-sm);
+        }
+
+        .empty svg {
+            width: 28px;
+            height: 28px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            opacity: 0.7;
+        }
+
+        .empty strong { color: var(--dc-fg); font-weight: 600; }
+
+        /* ---------- Focus ---------- */
         .btn:focus-visible,
-        .presence-select:focus-visible {
-            outline: 2px solid var(--accent-color);
-            outline-offset: 3px;
+        .nav-btn:focus-visible,
+        .seg-btn:focus-visible {
+            outline: 2px solid var(--dc-focus);
+            outline-offset: 2px;
         }
 
-        .github-icon {
-            width: 18px;
-            height: 18px;
-            fill: currentColor;
-        }
-
-        .view-section {
-            opacity: 1;
-            transform: translateY(0);
-            transition: opacity 0.2s ease, transform 0.2s ease;
-        }
-
-        .hidden {
-            display: none !important;
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        @media (max-width: 520px) {
-            body {
-                padding: 14px;
+        /* ---------- Responsive ---------- */
+        @media (max-width: 960px) {
+            .app {
+                grid-template-columns: 64px minmax(0, 1fr);
+                grid-template-areas:
+                    "rail main"
+                    "rail aside";
+                grid-template-rows: auto 1fr;
             }
 
-            .dashboard-card {
-                border-radius: 13px;
-                padding: 22px 18px;
-            }
-
-            .profile-card {
-                grid-template-columns: 52px minmax(0, 1fr);
-                gap: 12px;
-                padding: 14px;
-            }
-
-            .profile-avatar {
-                width: 48px;
-                height: 48px;
-            }
-
-            .profile-id {
-                grid-column: 2;
-                min-height: 0;
-                padding: 10px 0 0;
+            .aside {
                 border-left: 0;
-                border-top: 1px solid var(--border-color);
+                border-top: 1px solid var(--dc-border);
+                padding: var(--space-5) var(--space-6);
             }
+        }
+
+        @media (max-width: 600px) {
+            .app {
+                grid-template-columns: minmax(0, 1fr);
+                grid-template-areas: "rail" "main" "aside";
+                grid-template-rows: auto auto 1fr;
+            }
+
+            .rail {
+                flex-direction: row;
+                padding: var(--space-2) var(--space-4);
+                border-right: 0;
+                border-bottom: 1px solid var(--dc-border);
+            }
+
+            .brand-mark { margin: 0 var(--space-2) 0 0; width: 34px; height: 34px; }
+            .rail-nav { flex-direction: row; }
+            .nav-btn.active::before { display: none; }
+
+            .main, .aside { padding: var(--space-4); }
+
+            .hero-body { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
         }
 
         @media (prefers-reduced-motion: reduce) {
-            *,
-            *::before,
-            *::after {
-                transition-duration: 0.01ms !important;
-            }
+            *, *::before, *::after { transition-duration: 0.01ms !important; }
         }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <div class="dashboard-card">
+    <div class="app">
 
-            <!-- ================= LOGGED OUT VIEW ================= -->
-            <div id="view-logged-out" class="view-section">
-                <div class="header">
-                    <span class="brand-mark" aria-hidden="true">D</span>
-                    <div>
-                        <h1>DISCODE</h1>
-                        <p>Know when your friends are coding.</p>
-                    </div>
-                </div>
-
-                <div class="status-container">
-                    <span class="status-label">Status</span>
-                    <div class="status-indicator">
-                        <span class="dot" id="statusDot"></span>
-                        <span id="statusText">Offline</span>
-                    </div>
-                </div>
-
-                <button class="btn btn-primary" id="loginBtn" type="button" onclick="login()">
-                    <svg class="github-icon" viewBox="0 0 16 16" version="1.1" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                    </svg>
-                    Sign in with GitHub
+        <!-- ================= NAVIGATION RAIL ================= -->
+        <nav class="rail" aria-label="Discode navigation">
+            <div class="brand-mark" aria-label="Discode">D</div>
+            <div class="rail-nav">
+                <button class="nav-btn active" type="button" title="Home" aria-label="Home" aria-current="page">
+                    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+                </button>
+                <button class="nav-btn" type="button" title="Friends (coming soon)" aria-label="Friends" disabled>
+                    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 010 6.8"/><path d="M18 14.3c2 .7 3.5 2.6 3.5 5.7"/></svg>
+                </button>
+                <button class="nav-btn" type="button" title="Activity (coming soon)" aria-label="Activity" disabled>
+                    <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
                 </button>
             </div>
+        </nav>
 
-            <!-- ================= LOGGED IN VIEW ================= -->
-            <div id="view-logged-in" class="view-section hidden">
-                <div class="header">
-                    <span class="brand-mark" aria-hidden="true">D</span>
-                    <div>
-                        <h1>DISCODE</h1>
-                        <p>Your profile and presence at a glance.</p>
-                    </div>
+        <!-- ================= MAIN CONTENT ================= -->
+        <main class="main">
+
+            <!-- LOGGED OUT -->
+            <div id="view-logged-out" class="view">
+                <div class="page-header">
+                    <h1>Welcome to Discode</h1>
+                    <p>Know when your friends are coding.</p>
                 </div>
 
-                <div class="profile-card">
-                    <img class="profile-avatar" id="userAvatar" alt="GitHub avatar" hidden />
-                    <div>
-                        <span class="profile-label">Display name</span>
-                        <span class="profile-name" id="userName">Loading profile...</span>
-                        <span class="profile-login" id="userLogin">—</span>
+                <section class="card welcome">
+                    <span class="eyebrow">Get started</span>
+                    <h2>Share your presence while you code</h2>
+                    <p>Sign in with GitHub to show your status, see who is around, and find people open to contribute.</p>
+                    <button class="btn btn-primary" id="loginBtn" type="button" onclick="login()">
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                        </svg>
+                        Sign in with GitHub
+                    </button>
+                </section>
+
+                <section class="card">
+                    <div class="presence-head" style="margin-bottom:0">
+                        <span class="eyebrow">Status</span>
+                        <span class="status-pill" id="statusPill" data-status="offline">
+                            <span class="dot" id="statusDot"></span>
+                            <span id="statusText">Offline</span>
+                        </span>
                     </div>
-                    <div class="profile-id">
-                        <span class="profile-label">GitHub ID</span>
-                        <span class="profile-id-value" id="userId">—</span>
-                    </div>
-                </div>
-
-                <div class="status-container">
-                    <span class="status-label">Current status</span>
-                    <div class="status-indicator">
-                        <span class="dot online" id="statusDotLoggedIn"></span>
-                        <span id="statusTextLoggedIn" aria-live="polite">Online</span>
-                    </div>
-                </div>
-
-                <label class="profile-label presence-label" for="manualStatus">Your status</label>
-                <select class="presence-select" id="manualStatus" onchange="setManualStatus(this.value)">
-                    <option value="online">Automatic (Online / Idle)</option>
-                    <option value="focused">Focused</option>
-                    <option value="open-to-contribute">Open to Contribute</option>
-                </select>
-
-                <div class="stats-container">
-                    <span>Friends Online:</span>
-                    <span id="friendsCount">0</span>
-                </div>
-
-                <button class="btn btn-secondary" type="button" onclick="logout()">
-                    Sign Out
-                </button>
+                </section>
             </div>
 
-        </div>
+            <!-- LOGGED IN -->
+            <div id="view-logged-in" class="view hidden">
+                <div class="page-header">
+                    <h1>Dashboard</h1>
+                    <p>Your profile and presence at a glance.</p>
+                </div>
+
+                <section class="card hero" id="heroCard" data-status="online">
+                    <div class="hero-banner"></div>
+                    <div class="hero-body">
+                        <div class="avatar-wrap">
+                            <img class="avatar" id="userAvatar" alt="GitHub avatar" hidden />
+                            <span class="avatar-badge" aria-hidden="true"></span>
+                        </div>
+                        <div class="hero-text">
+                            <h2 class="hero-name" id="userName">Loading profile...</h2>
+                            <div class="hero-meta">
+                                <span id="userLogin">—</span><span class="sep">·</span>GitHub ID <span id="userId">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="presence-head">
+                        <div>
+                            <span class="eyebrow">Presence</span>
+                            <h3 class="card-title">Your status</h3>
+                        </div>
+                        <span class="status-pill" id="statusPillLoggedIn" data-status="online">
+                            <span class="dot" id="statusDotLoggedIn"></span>
+                            <span id="statusTextLoggedIn" aria-live="polite">Online</span>
+                        </span>
+                    </div>
+
+                    <div class="segmented" id="manualStatus" role="group" aria-label="Manual presence status">
+                        <button class="seg-btn" type="button" data-status="online" aria-pressed="true" onclick="setManualStatus('online')">
+                            <span class="seg-title">Automatic</span>
+                            <span class="seg-desc">Online or idle, detected for you</span>
+                        </button>
+                        <button class="seg-btn" type="button" data-status="focused" aria-pressed="false" onclick="setManualStatus('focused')">
+                            <span class="seg-title">Focused</span>
+                            <span class="seg-desc">Heads down, please don't disturb</span>
+                        </button>
+                        <button class="seg-btn" type="button" data-status="open-to-contribute" aria-pressed="false" onclick="setManualStatus('open-to-contribute')">
+                            <span class="seg-title">Open to Contribute</span>
+                            <span class="seg-desc">Happy to collaborate</span>
+                        </button>
+                    </div>
+                </section>
+
+                <div class="stats">
+                    <section class="card">
+                        <span class="eyebrow">Friends online</span>
+                        <span class="stat-value" id="friendsCount">0</span>
+                    </section>
+                </div>
+
+                <div class="actions">
+                    <button class="btn btn-secondary" type="button" onclick="logout()">Sign Out</button>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- ================= SOCIAL PANEL ================= -->
+        <aside class="aside" aria-label="Friends and activity">
+            <section class="panel">
+                <div class="panel-head">
+                    <span class="eyebrow">Friends</span>
+                    <span class="badge">0</span>
+                </div>
+                <div class="empty">
+                    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 010 6.8"/><path d="M18 14.3c2 .7 3.5 2.6 3.5 5.7"/></svg>
+                    <strong>No friends yet</strong>
+                    <span>Friends and their presence will show up here.</span>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <span class="eyebrow">Activity</span>
+                </div>
+                <div class="empty">
+                    <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+                    <strong>Nothing happening</strong>
+                    <span>Social activity will appear here.</span>
+                </div>
+            </section>
+        </aside>
+
     </div>
 
     <script>
@@ -584,40 +834,33 @@ export class OpenDashboard {
             }
         }
 
-        // Logic to swap the screens
         function setViewState(isLoggedIn) {
-            const loggedOutView = document.getElementById('view-logged-out');
-            const loggedInView = document.getElementById('view-logged-in');
-            
-            if (isLoggedIn) {
-                loggedOutView.classList.add('hidden');
-                loggedInView.classList.remove('hidden');
-            } else {
-                loggedInView.classList.add('hidden');
-                loggedOutView.classList.remove('hidden');
-            }
+            document.getElementById('view-logged-out').classList.toggle('hidden', isLoggedIn);
+            document.getElementById('view-logged-in').classList.toggle('hidden', !isLoggedIn);
         }
 
-        // Optional: Listen for backend state changes (e.g., when the extension first loads)
+        function labelFor(status) {
+            return status === 'open-to-contribute'
+                ? 'Open to Contribute'
+                : status.charAt(0).toUpperCase() + status.slice(1);
+        }
+
         window.addEventListener('message', event => {
             const message = event.data;
             if (message.type === 'auth.profile') {
                 document.getElementById('userName').textContent =
                     message.user.name || message.user.username;
                 document.getElementById('userLogin').textContent = message.user.username;
-                document.getElementById('userId').textContent =
-                    message.user.githubId;
+                document.getElementById('userId').textContent = message.user.githubId;
                 const avatar = document.getElementById('userAvatar');
                 avatar.src = message.user.avatarUrl;
                 avatar.hidden = false;
             } else if (message.type === 'auth.state') {
                 setViewState(message.authenticated);
                 if (message.authenticated && message.accountLabel) {
-                    document.getElementById('userLogin').textContent =
-                        message.accountLabel;
+                    document.getElementById('userLogin').textContent = message.accountLabel;
                 } else if (!message.authenticated) {
-                    document.getElementById('userName').textContent =
-                        'Not signed in';
+                    document.getElementById('userName').textContent = 'Not signed in';
                     document.getElementById('userLogin').textContent = '—';
                     document.getElementById('userId').textContent = '—';
                     const avatar = document.getElementById('userAvatar');
@@ -626,16 +869,15 @@ export class OpenDashboard {
                 }
             } else if (message.type === 'presence.state') {
                 const status = message.status;
-                document.getElementById('statusTextLoggedIn').textContent =
-                    status === 'open-to-contribute'
-                        ? 'Open to Contribute'
-                        : status.charAt(0).toUpperCase() + status.slice(1);
-                const statusDot = document.getElementById('statusDotLoggedIn');
-                statusDot.classList.toggle(
-                    'online',
-                    status !== 'idle' && status !== 'offline'
-                );
-                document.getElementById('manualStatus').value = message.manualStatus;
+                document.getElementById('statusTextLoggedIn').textContent = labelFor(status);
+                document.getElementById('statusPillLoggedIn').dataset.status = status;
+                document.getElementById('heroCard').dataset.status = status;
+                document.querySelectorAll('#manualStatus .seg-btn').forEach(btn => {
+                    btn.setAttribute(
+                        'aria-pressed',
+                        String(btn.dataset.status === message.manualStatus)
+                    );
+                });
             }
         });
 
