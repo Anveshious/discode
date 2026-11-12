@@ -24,7 +24,7 @@ afterEach(async () => {
   })));
 });
 
-async function requestSignIn({ pool, fetchGitHubUser, token = "github-token" }) {
+async function requestSignIn({ pool, fetchGitHubUser, token = "github-token", body = "{}" }) {
   const app = createApp(pool, { fetchGitHubUser });
   const server = app.listen(0);
   servers.add(server);
@@ -32,8 +32,11 @@ async function requestSignIn({ pool, fetchGitHubUser, token = "github-token" }) 
   const { port } = server.address();
   return fetch(`http://127.0.0.1:${port}/api/auth/github`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: "{}",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body,
   });
 }
 
@@ -153,6 +156,28 @@ test("rejects requests without a GitHub access token", async () => {
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: "github_auth_required" });
   assert.equal(verified, false);
+});
+
+test("returns a structured error for malformed JSON", async () => {
+  const response = await requestSignIn({
+    pool: {},
+    fetchGitHubUser: async () => assert.fail("must not verify GitHub identity"),
+    body: "{",
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_json" });
+});
+
+test("returns a structured error for oversized JSON requests", async () => {
+  const response = await requestSignIn({
+    pool: {},
+    fetchGitHubUser: async () => assert.fail("must not verify GitHub identity"),
+    body: JSON.stringify({ value: "x".repeat(100 * 1024) }),
+  });
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "payload_too_large" });
 });
 
 test("rejects invalid GitHub tokens without creating an account", async () => {

@@ -16,7 +16,7 @@ npm install
 npm run dev
 ```
 
-The API listens on `http://localhost:3000` by default and applies SQL migrations
+The API listens on `http://localhost:8000` by default and applies SQL migrations
 before accepting requests. `GET /api/health` runs a database query and returns
 `200` when PostgreSQL is reachable or `503` when it is unavailable.
 

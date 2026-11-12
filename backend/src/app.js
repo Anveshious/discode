@@ -11,6 +11,17 @@ export function createApp(pool, options = {}) {
   app.use((_request, response) => {
     response.status(404).json({ error: "Not found" });
   });
+  app.use((error, _request, response, next) => {
+    if (error.type === "entity.parse.failed") {
+      response.status(400).json({ error: "invalid_json" });
+      return;
+    }
+    if (error.type === "entity.too.large") {
+      response.status(413).json({ error: "payload_too_large" });
+      return;
+    }
+    next(error);
+  });
 
   return app;
 }

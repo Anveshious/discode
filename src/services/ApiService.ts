@@ -22,11 +22,7 @@ function isApiErrorResponse(value: unknown): value is ApiErrorResponse {
         && typeof (value as Record<string, unknown>).error === "string";
 }
 
-function getBackendBaseUrl(): URL {
-    const configuredUrl = vscode.workspace.getConfiguration("discode").get<string>(
-        "backendUrl",
-        "http://localhost:3000"
-    );
+export function resolveBackendBaseUrl(configuredUrl: string): URL {
     let url: URL;
     try {
         url = new URL(configuredUrl);
@@ -43,10 +39,26 @@ function getBackendBaseUrl(): URL {
         throw new Error("The Discode backend URL must not contain credentials or query parameters.");
     }
 
+    url.pathname = url.pathname.replace(/\/api(?:\/auth\/github)?\/?$/i, "") || "/";
     if (!url.pathname.endsWith("/")) {
         url.pathname += "/";
     }
     return url;
+}
+
+function getBackendBaseUrl(): URL {
+    const configuredUrl = vscode.workspace.getConfiguration("discode").get<string>(
+        "backendUrl",
+        "http://localhost:8000"
+    );
+    return resolveBackendBaseUrl(configuredUrl);
+}
+
+function getHttpErrorMessage(status: number, url: URL): string {
+    if (status === 404) {
+        return `The Discode API endpoint was not found at ${url.pathname} (HTTP 404). Check that the backend is running the current version and that discode.backendUrl uses the backend's configured host and port and is its base URL (not a route path).`;
+    }
+    return `The Discode backend returned an HTTP ${status} error.`;
 }
 
 export class ApiService {
@@ -122,7 +134,7 @@ export class ApiService {
         } catch {
             if (!response.ok) {
                 throw new ApiError(
-                    `The Discode backend returned an HTTP ${response.status} error.`,
+                    getHttpErrorMessage(response.status, url),
                     response.status
                 );
             }
@@ -131,7 +143,10 @@ export class ApiService {
 
         if (!response.ok) {
             const code = isApiErrorResponse(result) ? result.error : undefined;
-            if (response.status === 401 && code === "invalid_github_token") {
+            if (
+                response.status === 401
+                && (code === "invalid_github_token" || code === "github_auth_required")
+            ) {
                 await this.authManager.handleSessionExpired(session);
                 throw new ApiError("Your GitHub session expired. Please sign in again.", 401, code);
             }
@@ -143,7 +158,9 @@ export class ApiService {
                 );
             }
             throw new ApiError(
-                code
+                response.status === 404
+                    ? getHttpErrorMessage(response.status, url)
+                    : code
                     ? `The Discode API request failed: ${code}.`
                     : `The Discode API request failed with status ${response.status}.`,
                 response.status,

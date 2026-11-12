@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { ApiService } from "../services/ApiService";
+import { ApiService, resolveBackendBaseUrl } from "../services/ApiService";
 
 const session: vscode.AuthenticationSession = {
     id: "session-id",
@@ -37,6 +37,17 @@ suite("ApiService Test Suite", () => {
         assert.strictEqual(requestBody, "{}");
     });
 
+    test("normalizes backend URLs configured with the API route", async () => {
+        assert.strictEqual(
+            resolveBackendBaseUrl("http://localhost:3000/api/auth/github").toString(),
+            "http://localhost:8000/"
+        );
+        assert.strictEqual(
+            resolveBackendBaseUrl("http://localhost:3000/api").toString(),
+            "http://localhost:8000/"
+        );
+    });
+
     test("reports server errors and network disconnections", async () => {
         const authManager = {
             getSession: () => session,
@@ -54,6 +65,24 @@ suite("ApiService Test Suite", () => {
         await assert.rejects(networkErrorApi.get("api/health"), /Check your connection/);
     });
 
+    test("explains how to resolve a missing backend route", async () => {
+        const api = new ApiService(
+            {
+                getSession: () => session,
+                handleSessionExpired: async () => false,
+            },
+            async () => new Response("<!doctype html><title>Not Found</title>", {
+                status: 404,
+                headers: { "Content-Type": "text/html" },
+            })
+        );
+
+        await assert.rejects(
+            api.post("api/auth/github", {}),
+            /configured host and port/
+        );
+    });
+
     test("expires the GitHub session when the backend rejects its token", async () => {
         let expiredSession: vscode.AuthenticationSession | undefined;
         const api = new ApiService(
@@ -66,6 +95,26 @@ suite("ApiService Test Suite", () => {
             },
             async () => new Response(
                 JSON.stringify({ error: "invalid_github_token" }),
+                { status: 401 }
+            )
+        );
+
+        await assert.rejects(api.post("api/auth/github", {}), /session expired/);
+        assert.strictEqual(expiredSession, session);
+    });
+
+    test("expires the GitHub session when the backend requires authentication", async () => {
+        let expiredSession: vscode.AuthenticationSession | undefined;
+        const api = new ApiService(
+            {
+                getSession: () => session,
+                handleSessionExpired: async (value) => {
+                    expiredSession = value;
+                    return true;
+                },
+            },
+            async () => new Response(
+                JSON.stringify({ error: "github_auth_required" }),
                 { status: 401 }
             )
         );

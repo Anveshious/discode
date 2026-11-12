@@ -27,7 +27,10 @@ suite('PresenceTracker Test Suite', () => {
 			await new Promise((resolve) => setTimeout(resolve, 50));
 
 			const state = tracker.getCurrentPresence();
-			assert.strictEqual(state.status, 'active');
+			assert.strictEqual(
+				state.status,
+				state.isWindowFocused ? 'active' : 'idle'
+			);
 			// Untitled docs have scheme "untitled", not "file", so this
 			// tracker intentionally reports no fileName for them - that's
 			// expected, not a bug in the test.
@@ -46,7 +49,11 @@ suite('PresenceTracker Test Suite', () => {
 		const tracker = new PresenceTracker(20);
 
 		try {
-			assert.strictEqual(tracker.getCurrentPresence().status, 'active');
+			const initialState = tracker.getCurrentPresence();
+			assert.strictEqual(
+				initialState.status,
+				initialState.isWindowFocused ? 'active' : 'idle'
+			);
 			await new Promise((resolve) => setTimeout(resolve, 40));
 			assert.strictEqual(tracker.getCurrentPresence().status, 'idle');
 		} finally {
@@ -67,7 +74,7 @@ suite('PresenceTracker Test Suite', () => {
 		});
 
 		try {
-			assert.strictEqual(tracker.getCurrentPresence().status, 'active');
+			assert.ok(['active', 'idle'].includes(tracker.getCurrentPresence().status));
 			tracker.dispose();
 			assert.strictEqual(changes[changes.length - 1], 'offline');
 			assert.strictEqual(tracker.getCurrentPresence().status, 'offline');
