@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `backend/README.md`, `backend/src/app.js`, `backend/src/routes/users.js`, `backend/test/users.test.js`
 - Staged paths: `src/services/GitHubService.ts`, `src/test/githubService.test.ts`
 - Staged paths: `README.md`, `src/webview/DashboardView.ts`
 - Staged paths: `dev-test.txt`, `src/webview/DashboardView.ts`

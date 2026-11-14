@@ -1,6 +1,7 @@
 import express from "express";
 import { createAuthRouter } from "./routes/auth.js";
 import { createHealthRouter } from "./routes/health.js";
+import { createUsersRouter } from "./routes/users.js";
 
 export function createApp(pool, options = {}) {
   const app = express();
@@ -8,6 +9,7 @@ export function createApp(pool, options = {}) {
   app.use(express.json({ limit: "100kb" }));
   app.use("/api", createHealthRouter(pool));
   app.use("/api", createAuthRouter({ pool, ...options }));
+  app.use("/api", createUsersRouter(pool));
   app.use((_request, response) => {
     response.status(404).json({ error: "Not found" });
   });

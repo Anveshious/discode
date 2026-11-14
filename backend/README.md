@@ -29,6 +29,11 @@ subsequent sign-ins, matching accounts only by GitHub's immutable numeric ID.
 The response contains the Discode UUID, GitHub ID, profile fields, registration
 timestamp and preferences. The GitHub token is not stored.
 
+`POST /api/users/registered` accepts a JSON body containing a `githubIds` array
+of up to 100 positive integer GitHub IDs. It returns matching IDs as strings in
+`registeredGithubIds`, preserving PostgreSQL `BIGINT` values without precision
+loss.
+
 Set the extension's `discode.backendUrl` setting to the backend base URL. Use
 HTTPS outside localhost so GitHub credentials are protected in transit.
 
