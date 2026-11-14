@@ -63,11 +63,11 @@ export class PresenceManager implements vscode.Disposable {
     }
 
     public getStatus(): PresenceStatusValue {
-        if (this.activity === "offline") {
-            return "offline";
-        }
         if (this.manualStatus !== "online") {
             return this.manualStatus;
+        }
+        if (this.activity === "offline") {
+            return "offline";
         }
         return this.activity === "active" ? "online" : "idle";
     }

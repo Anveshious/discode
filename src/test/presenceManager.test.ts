@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { PresenceManager } from "../services/PresenceManager";
 
 suite("PresenceManager Test Suite", () => {
-    test("keeps manual status independent from detected activity", async () => {
+    test("manual status overrides detected activity until automatic is selected", async () => {
         const values = new Map<string, unknown>();
         const globalState: Pick<vscode.Memento, "get" | "update"> = {
             get<T>(key: string, defaultValue?: T): T | undefined {
@@ -30,7 +30,7 @@ suite("PresenceManager Test Suite", () => {
             assert.strictEqual(manager.getManualStatus(), "focused");
 
             manager.setActivity("offline");
-            assert.strictEqual(manager.getStatus(), "offline");
+            assert.strictEqual(manager.getStatus(), "focused");
             manager.setActivity("active");
             assert.strictEqual(manager.getStatus(), "focused");
 
