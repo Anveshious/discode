@@ -3,6 +3,7 @@ import { createAuthRouter } from "./routes/auth.js";
 import { createFriendRequestsRouter } from "./routes/friendRequests.js";
 import { createHealthRouter } from "./routes/health.js";
 import { createUsersRouter } from "./routes/users.js";
+import { createSocialRouter } from "./routes/social.js";
 
 export function createApp(pool, options = {}) {
   const app = express();
@@ -10,6 +11,7 @@ export function createApp(pool, options = {}) {
   app.use(express.json({ limit: "100kb" }));
   app.use("/api", createHealthRouter(pool));
   app.use("/api", createAuthRouter({ pool, ...options }));
+  app.use("/api", createSocialRouter({ pool, ...options }));
   app.use("/api", createFriendRequestsRouter({ pool, ...options }));
   app.use("/api", createUsersRouter(pool));
   app.use((_request, response) => {

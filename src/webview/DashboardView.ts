@@ -4,6 +4,12 @@ import { DiscodeService } from "../services/DiscodeService";
 import { GitHubService } from "../services/GitHubService";
 import { ManualPresenceStatus } from "../models/PresenceStatus";
 import { PresenceManager } from "../services/PresenceManager";
+import type { ConnectionKind } from "../models/Connection";
+
+function isConnectionKind(value: unknown): value is ConnectionKind {
+    return value === "followers" || value === "following";
+}
+const GITHUB_USERNAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 
 function isManualPresenceStatus(value: unknown): value is ManualPresenceStatus {
     return value === "online"
@@ -105,7 +111,50 @@ export class OpenDashboard {
                     }
                     await this.sendFriendRequest(panel, message.githubId);
                     break;
+                    case "connections.load": {
+    if (!isConnectionKind(message.kind)) {
+        return;
+    }
+    const page = Number.isInteger(message.page) && message.page >= 1 ? message.page : 1;
+    await this.postConnections(panel, message.kind, page);
+    break;
+}
+case "friend.request": {
+    if (typeof message.githubId !== "string" || !/^\d+$/.test(message.githubId)) {
+        return;
+    }
+    try {
+        await this.discodeService.sendFriendRequest(message.githubId);
+        await panel.webview.postMessage({
+            type: "friend.requestResult", githubId: message.githubId, status: "sent",
+        });
+    } catch (error) {
+        await panel.webview.postMessage({
+            type: "friend.requestResult", githubId: message.githubId, status: "error",
+        });
+        await vscode.window.showErrorMessage(
+            error instanceof Error ? error.message : "Unable to send the friend request."
+        );
+    }
+    break;
+}
+case "friend.invite": {
+    if (typeof message.username !== "string" || !GITHUB_USERNAME.test(message.username)) {
+        return;
+    }
+    // Build the URL here; never trust a URL coming from the webview.
+    const invite = `Hey @${message.username}, join me on Discode - a VS Code extension that shows when your friends are coding!`;
+    await vscode.env.clipboard.writeText(invite);
+    await vscode.env.openExternal(
+        vscode.Uri.parse(`https://github.com/${encodeURIComponent(message.username)}`)
+    );
+    void vscode.window.showInformationMessage(
+        "Invite message copied. Share it with them via their GitHub profile."
+    );
+    break;
+}
             }
+            
         });
 
         const authStateSubscription = this.authManager.onDidChangeAuthentication(
@@ -266,6 +315,25 @@ export class OpenDashboard {
             && currentSession?.id === session.id
             && currentSession.accessToken === session.accessToken;
     }
+    private async postConnections(
+    panel: vscode.WebviewPanel, kind: ConnectionKind, page: number
+): Promise<void> {
+    try {
+        const result = await this.discodeService.getConnections(kind, page);
+        if (this.panel !== panel) {
+            return;
+        }
+        await panel.webview.postMessage({
+            type: "connections.list", kind, page,
+            hasMore: result.hasMore, items: result.items,
+        });
+    } catch (error) {
+        await panel.webview.postMessage({
+            type: "connections.error", kind, page,
+            message: error instanceof Error ? error.message : "Unable to load the list.",
+        });
+    }
+}
 
     private getHtmlContent(): string {
         return `<!DOCTYPE html>

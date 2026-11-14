@@ -1,5 +1,6 @@
 import type { AuthManager } from "../auth/AuthManager";
 import { ApiError, ApiService } from "./ApiService";
+import type { Connection, ConnectionKind, ConnectionPage } from "../models/Connection";
 
 export interface DiscodeProfile {
     id: string;
@@ -81,4 +82,40 @@ export class DiscodeService {
 
         return result;
     }
+        public async getConnections(kind: ConnectionKind, page: number): Promise<ConnectionPage> {
+        const result = await this.api.get(`api/social/${kind}?page=${page}`);
+        if (!isConnectionPage(result)) {
+            throw new Error("The Discode backend returned an invalid connections list.");
+        }
+        return result;
+    }
+
+    public async sendFriendRequest(githubId: string): Promise<void> {
+        await this.api.post("api/friend-requests", { githubId });
+    }
+}
+
+function isConnection(value: unknown): value is Connection {
+    if (typeof value !== "object" || value === null) {
+        return false;
+    }
+    const c = value as Record<string, unknown>;
+    return typeof c.githubId === "string" && /^\d+$/.test(c.githubId)
+        && typeof c.username === "string"
+        && typeof c.avatarUrl === "string"
+        && typeof c.profileUrl === "string"
+        && typeof c.onDiscode === "boolean"
+        && (c.requestStatus === null
+            || ["none", "sent", "received", "friends"].includes(c.requestStatus as string));
+}
+
+function isConnectionPage(value: unknown): value is ConnectionPage {
+    if (typeof value !== "object" || value === null) {
+        return false;
+    }
+    const p = value as Record<string, unknown>;
+    return typeof p.page === "number"
+        && typeof p.hasMore === "boolean"
+        && Array.isArray(p.items)
+        && p.items.every(isConnection);
 }
