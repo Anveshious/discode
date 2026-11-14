@@ -1,3 +1,4 @@
+import type { AuthenticationSession } from "vscode";
 import type { AuthManager } from "../auth/AuthManager";
 import type { GitHubUser } from "../models/GitHubUser";
 
@@ -29,6 +30,35 @@ function isGitHubUserResponse(value: unknown): value is GitHubUserResponse {
         && typeof user.following === "number";
 }
 
+function isValidGitHubUsername(username: string): boolean {
+    return username.length <= 39
+        && /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/.test(username)
+        && !username.includes("--");
+}
+
+async function parseGitHubUserResponse(response: Response): Promise<GitHubUser> {
+    let user: unknown;
+    try {
+        user = await response.json();
+    } catch {
+        throw new Error("GitHub API returned an invalid response.");
+    }
+
+    if (!isGitHubUserResponse(user)) {
+        throw new Error("GitHub API returned an invalid user profile.");
+    }
+
+    return {
+        id: user.id,
+        login: user.login,
+        name: user.name,
+        avatar_url: user.avatar_url,
+        html_url: user.html_url,
+        followers: user.followers,
+        following: user.following,
+    };
+}
+
 export class GitHubService {
     constructor(
         private readonly authManager: Pick<AuthManager, "getSession" | "handleSessionExpired">
@@ -55,40 +85,66 @@ export class GitHubService {
 
         if (!response.ok) {
             if (response.status === 401) {
-                let sessionExpired: boolean;
-                try {
-                    sessionExpired = await this.authManager.handleSessionExpired(session);
-                } catch {
-                    throw new Error(
-                        "Your GitHub session expired. Please sign in again; the sign-out state could not be saved."
-                    );
-                }
-                if (sessionExpired) {
-                    throw new Error("Your GitHub session expired. Please sign in again.");
-                }
+                await this.handleUnauthorizedResponse(session);
             }
             throw new Error(`GitHub API request failed with status ${response.status}.`);
         }
 
-        let user: unknown;
+        return parseGitHubUserResponse(response);
+    }
+
+    public async findUserByUsername(username: string): Promise<GitHubUser | undefined> {
+        const session = this.authManager.getSession();
+        if (!session) {
+            throw new Error("GitHub authentication is required to search users.");
+        }
+
+        const normalizedUsername = username.trim();
+        if (!isValidGitHubUsername(normalizedUsername)) {
+            throw new Error("Enter a valid GitHub username.");
+        }
+
+        let response: Response;
         try {
-            user = await response.json();
+            response = await fetch(
+                `https://api.github.com/users/${encodeURIComponent(normalizedUsername)}`,
+                {
+                    headers: {
+                        Accept: "application/vnd.github+json",
+                        Authorization: `Bearer ${session.accessToken}`,
+                        "X-GitHub-Api-Version": "2022-11-28",
+                    },
+                }
+            );
         } catch {
-            throw new Error("GitHub API returned an invalid response.");
+            throw new Error("Unable to reach the GitHub API.");
         }
 
-        if (!isGitHubUserResponse(user)) {
-            throw new Error("GitHub API returned an invalid user profile.");
+        if (response.status === 404) {
+            return undefined;
         }
 
-        return {
-            id: user.id,
-            login: user.login,
-            name: user.name,
-            avatar_url: user.avatar_url,
-            html_url: user.html_url,
-            followers: user.followers,
-            following: user.following,
-        };
+        if (response.status === 401) {
+            await this.handleUnauthorizedResponse(session);
+        }
+        if (!response.ok) {
+            throw new Error(`GitHub API request failed with status ${response.status}.`);
+        }
+
+        return parseGitHubUserResponse(response);
+    }
+
+    private async handleUnauthorizedResponse(session: AuthenticationSession): Promise<void> {
+        let sessionExpired: boolean;
+        try {
+            sessionExpired = await this.authManager.handleSessionExpired(session);
+        } catch {
+            throw new Error(
+                "Your GitHub session expired. Please sign in again; the sign-out state could not be saved."
+            );
+        }
+        if (sessionExpired) {
+            throw new Error("Your GitHub session expired. Please sign in again.");
+        }
     }
 }

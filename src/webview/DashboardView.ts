@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../auth/AuthManager";
 import { DiscodeService } from "../services/DiscodeService";
+import { GitHubService } from "../services/GitHubService";
 import { ManualPresenceStatus } from "../models/PresenceStatus";
 import { PresenceManager } from "../services/PresenceManager";
 
@@ -13,12 +14,14 @@ function isManualPresenceStatus(value: unknown): value is ManualPresenceStatus {
 export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
     private readonly discodeService: DiscodeService;
+    private readonly githubService: GitHubService;
 
     constructor(
         private readonly authManager: AuthManager,
         private readonly presenceManager: PresenceManager
     ) {
         this.discodeService = new DiscodeService(authManager);
+        this.githubService = new GitHubService(authManager);
     }
 
     public async show(): Promise<void> {
@@ -70,6 +73,17 @@ export class OpenDashboard {
                     } catch {
                         await vscode.window.showErrorMessage("Unable to save your presence status.");
                     }
+                    break;
+                case "github.searchUser":
+                    if (typeof message.username !== "string") {
+                        await panel.webview.postMessage({
+                            type: "github.search.error",
+                            message: "Enter a valid GitHub username.",
+                        });
+                        return;
+                    }
+
+                    await this.searchGitHubUser(panel, message.username);
                     break;
             }
         });
@@ -135,6 +149,47 @@ export class OpenDashboard {
                 : "Unable to load your GitHub profile.";
             await vscode.window.showErrorMessage(message);
         }
+    }
+
+    private async searchGitHubUser(panel: vscode.WebviewPanel, username: string): Promise<void> {
+        const session = this.authManager.getSession();
+        if (!session) {
+            await panel.webview.postMessage({
+                type: "github.search.error",
+                message: "Sign in with GitHub to search for users.",
+            });
+            return;
+        }
+
+        try {
+            const user = await this.githubService.findUserByUsername(username);
+            if (!this.isCurrentSearch(panel, session)) {
+                return;
+            }
+
+            await panel.webview.postMessage({
+                type: "github.search.result",
+                user: user ?? null,
+            });
+        } catch (error) {
+            if (!this.isCurrentSearch(panel, session)) {
+                return;
+            }
+            await panel.webview.postMessage({
+                type: "github.search.error",
+                message: error instanceof Error ? error.message : "Unable to search GitHub users.",
+            });
+        }
+    }
+
+    private isCurrentSearch(
+        panel: vscode.WebviewPanel,
+        session: vscode.AuthenticationSession
+    ): boolean {
+        const currentSession = this.authManager.getSession();
+        return this.panel === panel
+            && currentSession?.id === session.id
+            && currentSession.accessToken === session.accessToken;
     }
 
     private getHtmlContent(): string {
@@ -589,6 +644,81 @@ export class OpenDashboard {
             border-radius: var(--radius);
         }
 
+        .search-form {
+            display: flex;
+            gap: var(--space-2);
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 0;
+            padding: 8px 10px;
+            color: var(--dc-fg);
+            font: inherit;
+            background: var(--dc-raised);
+            border: 1px solid var(--dc-border);
+            border-radius: var(--radius-sm);
+        }
+
+        .search-input:focus-visible {
+            outline: 2px solid var(--dc-focus);
+            outline-offset: 2px;
+        }
+
+        .search-form .btn {
+            padding: 8px 12px;
+        }
+
+        .search-form .btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        .search-status {
+            margin: var(--space-2) 0 0;
+            color: var(--dc-muted);
+        }
+
+        .search-result {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin-top: var(--space-3);
+            padding: var(--space-3);
+            border: 1px solid var(--dc-border);
+            border-radius: var(--radius-sm);
+        }
+
+        .search-avatar {
+            width: 40px;
+            height: 40px;
+            flex: 0 0 auto;
+            border-radius: 50%;
+            background: var(--dc-raised);
+        }
+
+        .search-user-details {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .search-user-details strong,
+        .search-user-details span {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .search-user-details span {
+            color: var(--dc-muted);
+        }
+
+        .search-profile-link {
+            color: var(--dc-focus);
+            white-space: nowrap;
+        }
+
         .empty {
             display: flex;
             flex-direction: column;
@@ -786,6 +916,27 @@ export class OpenDashboard {
 
         <!-- ================= SOCIAL PANEL ================= -->
         <aside class="aside" aria-label="Friends and activity">
+            <section class="panel hidden" id="github-search-panel" aria-label="GitHub user search">
+                <div class="panel-head">
+                    <span class="eyebrow">Find GitHub users</span>
+                </div>
+                <form class="search-form" id="githubSearchForm">
+                    <input
+                        class="search-input"
+                        id="githubUsername"
+                        type="search"
+                        aria-label="GitHub username"
+                        placeholder="GitHub username"
+                        maxlength="39"
+                        autocomplete="off"
+                        required
+                    />
+                    <button class="btn btn-primary" id="githubSearchButton" type="submit">Search</button>
+                </form>
+                <p class="search-status" id="githubSearchStatus" role="status" aria-live="polite"></p>
+                <div class="search-result" id="githubSearchResult" hidden></div>
+            </section>
+
             <section class="panel">
                 <div class="panel-head">
                     <span class="eyebrow">Friends</span>
@@ -834,9 +985,66 @@ export class OpenDashboard {
             }
         }
 
+        document.getElementById('githubSearchForm').addEventListener('submit', event => {
+            event.preventDefault();
+            const usernameInput = document.getElementById('githubUsername');
+            const username = usernameInput.value.trim();
+            const status = document.getElementById('githubSearchStatus');
+            const result = document.getElementById('githubSearchResult');
+            const button = document.getElementById('githubSearchButton');
+
+            result.hidden = true;
+            result.replaceChildren();
+            if (!username) {
+                status.textContent = 'Enter a GitHub username to search.';
+                return;
+            }
+            if (!vscode) {
+                status.textContent = 'Search is available in the VS Code dashboard.';
+                return;
+            }
+
+            usernameInput.disabled = true;
+            button.disabled = true;
+            status.textContent = 'Searching GitHub...';
+            vscode.postMessage({ type: 'github.searchUser', username });
+        });
+
         function setViewState(isLoggedIn) {
             document.getElementById('view-logged-out').classList.toggle('hidden', isLoggedIn);
             document.getElementById('view-logged-in').classList.toggle('hidden', !isLoggedIn);
+            document.getElementById('github-search-panel').classList.toggle('hidden', !isLoggedIn);
+        }
+
+        function finishGitHubSearch() {
+            document.getElementById('githubUsername').disabled = false;
+            document.getElementById('githubSearchButton').disabled = false;
+        }
+
+        function showGitHubUser(user) {
+            const result = document.getElementById('githubSearchResult');
+            const avatar = document.createElement('img');
+            avatar.className = 'search-avatar';
+            avatar.src = user.avatar_url;
+            avatar.alt = '';
+
+            const details = document.createElement('div');
+            details.className = 'search-user-details';
+            const name = document.createElement('strong');
+            name.textContent = user.name || user.login;
+            const username = document.createElement('span');
+            username.textContent = '@' + user.login;
+            details.append(name, username);
+
+            const link = document.createElement('a');
+            link.className = 'search-profile-link';
+            link.href = 'https://github.com/' + encodeURIComponent(user.login);
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'View profile';
+
+            result.replaceChildren(avatar, details, link);
+            result.hidden = false;
         }
 
         function labelFor(status) {
@@ -857,6 +1065,11 @@ export class OpenDashboard {
                 avatar.hidden = false;
             } else if (message.type === 'auth.state') {
                 setViewState(message.authenticated);
+                if (!message.authenticated) {
+                    document.getElementById('githubSearchStatus').textContent = '';
+                    document.getElementById('githubSearchResult').hidden = true;
+                    finishGitHubSearch();
+                }
                 if (message.authenticated && message.accountLabel) {
                     document.getElementById('userLogin').textContent = message.accountLabel;
                 } else if (!message.authenticated) {
@@ -878,6 +1091,20 @@ export class OpenDashboard {
                         String(btn.dataset.status === message.manualStatus)
                     );
                 });
+            } else if (message.type === 'github.search.result') {
+                finishGitHubSearch();
+                if (!message.user) {
+                    document.getElementById('githubSearchStatus').textContent =
+                        'No GitHub user found for @' + document.getElementById('githubUsername').value.trim() + '.';
+                    return;
+                }
+
+                document.getElementById('githubSearchStatus').textContent =
+                    'Found @' + message.user.login + '.';
+                showGitHubUser(message.user);
+            } else if (message.type === 'github.search.error') {
+                finishGitHubSearch();
+                document.getElementById('githubSearchStatus').textContent = message.message;
             }
         });
 

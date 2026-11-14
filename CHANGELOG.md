@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `src/services/GitHubService.ts`, `src/test/githubService.test.ts`, `src/webview/DashboardView.ts`
 - Staged paths: `src/services/PresenceManager.ts`, `src/test/presenceManager.test.ts`
 - Staged paths: `.gitignore`, `.vscodeignore`, `LICENSE.md`, `README.md`, `backend/.vscodeignore`, and 2 more
 - Staged paths: `src/webview/DashboardView.ts`
