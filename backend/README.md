@@ -34,6 +34,13 @@ invitation creation flow must generate the random token, hash it, and provide
 the hash when inserting the record; the raw token should only be returned to
 the invite sender.
 
+Friend relationships are represented by `friend_requests`. Each row records
+the requester, recipient, status (`pending`, `accepted`, `declined`, or
+`cancelled`), creation time, and resolution time. A user cannot request
+themselves, and an active pending request or accepted friendship can exist only
+once per user pair, regardless of direction. Declined or cancelled requests
+remain in the table as history.
+
 Set the extension's `discode.backendUrl` setting to the backend base URL. Use
 HTTPS outside localhost so GitHub credentials are protected in transit.
 
