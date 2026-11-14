@@ -3,6 +3,7 @@ import { StatusBarManager } from "../ui/StatusBarManager";
 import { CommandManager } from "../commands/CommandManager";
 import { AuthManager } from "../auth/AuthManager";
 import { PresenceManager } from "../services/PresenceManager";
+import { PresenceSync } from "../services/PresenceSync";
 import { PresenceTracker } from "../presence/presenceTracker";
 
 export class ExtensionController implements vscode.Disposable {
@@ -10,6 +11,7 @@ export class ExtensionController implements vscode.Disposable {
     private commandManager: CommandManager;
     private authManager: AuthManager;
     private presenceManager: PresenceManager;
+    private presenceSync: PresenceSync;
     private presenceTracker?: PresenceTracker;
     private readonly authStateSubscription: vscode.Disposable;
     private readonly presenceSubscription: vscode.Disposable;
@@ -18,6 +20,7 @@ export class ExtensionController implements vscode.Disposable {
     constructor(context: vscode.ExtensionContext) {
         this.authManager = new AuthManager(context.secrets, context.globalState);
         this.presenceManager = new PresenceManager(context.globalState);
+        this.presenceSync = new PresenceSync(this.authManager, this.presenceManager);
         this.statusBar = new StatusBarManager();
         this.commandManager = new CommandManager(this.authManager, this.presenceManager);
         this.updateStatusBar();
@@ -58,6 +61,7 @@ export class ExtensionController implements vscode.Disposable {
 
     dispose() {
         this.presenceTracker?.dispose();
+        this.presenceSync.dispose();
         this.activitySubscription?.dispose();
         this.authStateSubscription.dispose();
         this.presenceSubscription.dispose();

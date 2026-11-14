@@ -43,10 +43,9 @@ Discode will use GitHub's supported APIs for public user search and profile look
 
 ### 3. Friends and Connections
 
-- Send, receive, accept and reject friend requests.
-- Maintain a friends list inside the Discode dashboard.
-- Remove existing connections.
-- Show friends' availability and permitted activity.
+- Send friend requests to registered Discode users and accept incoming requests.
+- Maintain an accepted-friends list inside the Discode dashboard.
+- Show each accepted friend's current status, including online and offline.
 
 Friend relationships will be managed by Discode rather than inferred from GitHub followers.
 
@@ -62,7 +61,9 @@ Discode is intended to support the following statuses:
 | Open to Contribute | Available for collaboration |
 | Offline | Not connected to Discode |
 
-Users should be able to select a status manually, while automatic activity detection provides supporting presence information. Manual status and connection state should remain distinct.
+Users should be able to select a status manually, while automatic activity detection provides supporting presence information. Manual status and connection state remain distinct. The extension publishes a
+presence heartbeat every 30 seconds; friends are shown as offline when their
+last update is more than 90 seconds old.
 
 ### 5. Coding Activity
 
@@ -91,9 +92,9 @@ The dashboard is the central social interface inside VS Code. The planned dashbo
 
 - GitHub profile and Discode identity.
 - Current status selector.
-- Friends list and online indicators.
+- Accepted friends with online/offline indicators.
 - GitHub username search.
-- Incoming and outgoing friend requests.
+- Incoming friend requests and accept actions.
 - Invitation actions.
 - Privacy and notification settings.
 
@@ -119,31 +120,31 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Modular extension structure separating authentication, commands, services, models and UI.
 - [x] Initial presence-status definitions, including Online, Idle, Focused and Open to Contribute.
 - [x] Local presence tracking groundwork.
+- [x] Backend friend requests, acceptance, and accepted-friend listing.
+- [x] Publish presence with a 30-second heartbeat and expire stale presence after 90 seconds.
+- [x] Show accepted friends and incoming requests in the dashboard.
 
 ### In Progress / Needs Integration
 
 - [ ] Finalize the dashboard experience and connect all UI states to extension services.
-- [ ] Synchronize automatic and manual presence with the backend.
-- [ ] Establish the backend contract and connect the extension to it.
-- [ ] Define persistent Discode user registration and identity verification.
 
 ### Planned
 
 - [x] Backend Express API foundation, PostgreSQL connection configuration, and database health endpoint.
 - [x] GitHub-verified sign-in that creates or updates a Discode account using the numeric GitHub ID.
-- [ ] Backend user API and PostgreSQL schema/migrations.
-- [ ] Discode user registration and profile persistence.
+- [x] Backend user API and PostgreSQL schema/migrations.
+- [x] Discode user registration and profile persistence.
 - [x] GitHub username search and public profile discovery.
-- [ ] Registered-user detection and invitation flow.
-- [ ] Friend requests and connection management.
-- [ ] Real-time online/offline presence across users.
-- [ ] Manual status selection and synchronization.
+- [ ] Invitation flow for users not yet registered.
+- [x] Friend requests and accepted-friend connections.
+- [x] Online/offline presence across accepted friends using heartbeat polling.
+- [x] Manual status selection and synchronization.
 - [ ] Privacy-controlled coding activity sharing.
 - [ ] Real-time friend notifications.
 - [ ] Dashboard redesign and account settings.
 - [ ] Testing, packaging and eventual Marketplace release.
 
-> **Status note:** The checklist reflects the current project baseline. A local status model or tracker does not mean that friends can already see one another's presence. Cross-user functionality requires the backend and real-time service.
+> **Status note:** Presence is shared through authenticated REST heartbeats and dashboard polling. A dedicated real-time push service and notifications remain future work.
 
 Automatic presence initializes with the extension and detects editor activity and VS Code focus locally. After five minutes without editor activity, or when VS Code loses focus, activity becomes Idle. When no editor is active or the extension shuts down, its local presence becomes Offline and pending idle timers are cleared. Selecting Focused or Open to Contribute sets a separate manual override while the extension is active; choosing Automatic returns to the activity-derived Online/Idle state.
 
@@ -159,30 +160,28 @@ The extension is being developed with a modular architecture so that authenticat
 | Dashboard | VS Code Webview; React as a future option | Social interface and user interactions |
 | Backend | Node.js, Express | User registration, profiles, friend relationships and API |
 | Database | PostgreSQL | Persistent users, connections and preferences |
-| Real-time service | Socket.IO / WebSockets | Presence and activity synchronization |
+| Presence transport | Authenticated REST heartbeat and dashboard polling | Friend presence synchronization with stale-presence expiry |
 | Identity and discovery | GitHub Authentication API and GitHub REST API | Authentication and public profile lookup |
 
 ### High-Level Architecture
 
 ```mermaid
 flowchart TD
-    A[VS Code Extension] <-->|HTTPS / WebSocket| B[Discode Backend]
+    A[VS Code Extension] <-->|HTTPS| B[Discode Backend]
     A --> C[Discode Dashboard]
     B <--> D[(PostgreSQL Database)]
     B <--> E[GitHub API]
-    B <--> F[Real-Time Presence Service]
-    F <-->|Presence updates| B
 ```
 
-The GitHub authentication provider establishes the user's identity in the extension. The backend must independently verify the identity presented by the extension before creating or accessing a Discode account. The backend then manages Discode-specific data, while the real-time service distributes presence updates to authorized friends.
+The GitHub authentication provider establishes the user's identity in the extension. The backend independently verifies the identity presented by the extension before creating or accessing a Discode account. The backend manages Discode-specific data and limits shared presence to accepted friends.
 
 GitHub usernames can change, so the numeric GitHub account ID is the stable identity key. The username and other profile fields are presentation data, not account keys. Signing out of Discode clears the extension's local authenticated state; the GitHub account itself remains signed in to VS Code.
 
-The backend directory now contains the Express API, PostgreSQL connection pool, environment configuration, local Compose database, database-aware health route, a users-table migration, and GitHub-verified account registration/sign-in. Friend/social APIs and real-time infrastructure are not yet implemented.
+The backend directory contains the Express API, PostgreSQL connection pool, environment configuration, local Compose database, GitHub-verified account registration, friend requests, accepted-friend listing, and presence endpoints. A dedicated real-time push service is not yet implemented.
 
 See [backend/README.md](./backend/README.md) for backend setup and development commands.
 
-The extension's dedicated API service sends the current VS Code GitHub session as a bearer token when synchronizing the account through `POST /api/auth/github`. The API service reports network, server, invalid-response and authentication errors rather than treating failed requests as success.
+The extension's dedicated API service sends the current VS Code GitHub session as a bearer token for account, social, and presence operations. The API service reports network, server, invalid-response and authentication errors rather than treating failed requests as success.
 
 ---
 
@@ -193,11 +192,11 @@ Development will proceed incrementally, preserving the working extension while i
 | Phase | Scope | Status |
 |---|---|---|
 | 01 | GitHub authentication and identity | Implemented groundwork |
-| 02 | Backend integration and user registration | Planned |
-| 03 | GitHub username search and developer discovery | Planned |
-| 04 | Friend requests and social connections | Planned |
-| 05 | Real-time online/offline presence | Planned |
-| 06 | Custom statuses and activity detection | Local groundwork; synchronization planned |
+| 02 | Backend integration and user registration | Implemented |
+| 03 | GitHub username search and developer discovery | Implemented |
+| 04 | Friend requests and accepted-friend connections | Implemented |
+| 05 | Online/offline presence via heartbeats | Implemented; push updates planned |
+| 06 | Custom statuses and activity detection | Implemented |
 | 07 | VS Code notifications | Planned |
 | 08 | Dashboard improvements, privacy controls and polish | Ongoing / planned |
 

@@ -1,4 +1,5 @@
 import type { AuthManager } from "../auth/AuthManager";
+import { isPresenceStatus, PresenceStatusValue } from "../models/PresenceStatus";
 import { ApiError, ApiService } from "./ApiService";
 
 export interface DiscodeProfile {
@@ -21,6 +22,56 @@ export interface DiscodeProfile {
 interface SignInResponse {
     user: DiscodeProfile;
     created: boolean;
+}
+
+export interface DiscodeFriend {
+    githubId: string;
+    username: string;
+    name: string | null;
+    avatarUrl: string;
+    profileUrl: string;
+    status: PresenceStatusValue;
+}
+
+export interface DiscodeFriendRequest {
+    id: string;
+    githubId: string;
+    username: string;
+    name: string | null;
+    avatarUrl: string;
+    profileUrl: string;
+    createdAt: string;
+}
+
+function isDiscodeFriend(value: unknown): value is DiscodeFriend {
+    if (typeof value !== "object" || value === null) {
+        return false;
+    }
+
+    const friend = value as Record<string, unknown>;
+    return typeof friend.githubId === "string"
+        && /^\d+$/.test(friend.githubId)
+        && typeof friend.username === "string"
+        && (typeof friend.name === "string" || friend.name === null)
+        && typeof friend.avatarUrl === "string"
+        && typeof friend.profileUrl === "string"
+        && isPresenceStatus(friend.status);
+}
+
+function isDiscodeFriendRequest(value: unknown): value is DiscodeFriendRequest {
+    if (typeof value !== "object" || value === null) {
+        return false;
+    }
+
+    const request = value as Record<string, unknown>;
+    return typeof request.id === "string"
+        && typeof request.githubId === "string"
+        && /^\d+$/.test(request.githubId)
+        && typeof request.username === "string"
+        && (typeof request.name === "string" || request.name === null)
+        && typeof request.avatarUrl === "string"
+        && typeof request.profileUrl === "string"
+        && typeof request.createdAt === "string";
 }
 
 function isDiscodeProfile(value: unknown): value is DiscodeProfile {
@@ -80,5 +131,72 @@ export class DiscodeService {
         }
 
         return result;
+    }
+
+    public async getFriends(): Promise<DiscodeFriend[]> {
+        const result = await this.api.get("api/friends");
+        if (
+            typeof result !== "object"
+            || result === null
+            || !Array.isArray((result as Record<string, unknown>).friends)
+            || !(result as { friends: unknown[] }).friends.every(isDiscodeFriend)
+        ) {
+            throw new Error("The Discode backend returned an invalid friends list.");
+        }
+
+        return (result as { friends: DiscodeFriend[] }).friends;
+    }
+
+    public async getFriendRequests(): Promise<DiscodeFriendRequest[]> {
+        const result = await this.api.get("api/friend-requests");
+        if (
+            typeof result !== "object"
+            || result === null
+            || !Array.isArray((result as Record<string, unknown>).requests)
+            || !(result as { requests: unknown[] }).requests.every(isDiscodeFriendRequest)
+        ) {
+            throw new Error("The Discode backend returned an invalid friend requests list.");
+        }
+
+        return (result as { requests: DiscodeFriendRequest[] }).requests;
+    }
+
+    public async sendFriendRequest(githubId: string | number): Promise<void> {
+        const result = await this.api.post("api/friend-requests", { githubId });
+        if (
+            typeof result !== "object"
+            || result === null
+            || (result as Record<string, unknown>).status !== "pending"
+        ) {
+            throw new Error("The Discode backend returned an invalid friend request result.");
+        }
+    }
+
+    public async acceptFriendRequest(requestId: string): Promise<void> {
+        const result = await this.api.post(
+            `api/friend-requests/${encodeURIComponent(requestId)}/accept`,
+            {}
+        );
+        if (
+            typeof result !== "object"
+            || result === null
+            || (result as Record<string, unknown>).status !== "accepted"
+        ) {
+            throw new Error("The Discode backend returned an invalid friend request result.");
+        }
+    }
+
+    public async updatePresence(status: PresenceStatusValue): Promise<void> {
+        const result = await this.api.request("api/presence", {
+            method: "PUT",
+            body: { status },
+        });
+        if (
+            typeof result !== "object"
+            || result === null
+            || (result as Record<string, unknown>).status !== status
+        ) {
+            throw new Error("The Discode backend returned an invalid presence result.");
+        }
     }
 }

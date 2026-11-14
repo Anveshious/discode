@@ -1,6 +1,7 @@
 import express from "express";
 import { createAuthRouter } from "./routes/auth.js";
 import { createHealthRouter } from "./routes/health.js";
+import { createSocialRouter } from "./routes/social.js";
 import { createUsersRouter } from "./routes/users.js";
 
 export function createApp(pool, options = {}) {
@@ -10,6 +11,10 @@ export function createApp(pool, options = {}) {
   app.use("/api", createHealthRouter(pool));
   app.use("/api", createAuthRouter({ pool, ...options }));
   app.use("/api", createUsersRouter(pool));
+  app.use("/api", createSocialRouter({
+    pool,
+    fetchGitHubUser: options.fetchGitHubUser,
+  }));
   app.use((_request, response) => {
     response.status(404).json({ error: "Not found" });
   });

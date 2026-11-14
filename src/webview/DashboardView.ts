@@ -11,9 +11,23 @@ function isManualPresenceStatus(value: unknown): value is ManualPresenceStatus {
         || value === "open-to-contribute";
 }
 
+function isGitHubId(value: unknown): value is string | number {
+    if (typeof value === "string") {
+        if (!/^\d{1,19}$/.test(value)) {
+            return false;
+        }
+        const id = BigInt(value);
+        return id > 0n && id <= 9223372036854775807n;
+    }
+    return typeof value === "number"
+        && Number.isSafeInteger(value)
+        && value > 0;
+}
+
 export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
     private latestSearchRequestId = 0;
+    private socialRefreshInterval?: NodeJS.Timeout;
     private readonly discodeService: DiscodeService;
     private readonly githubService: GitHubService;
 
@@ -49,6 +63,7 @@ export class OpenDashboard {
                 case "webview.ready":
                     await this.postAuthenticationState(panel);
                     await this.postPresenceState(panel);
+                    await this.refreshSocialData(panel);
                     break;
                 case "auth.login":
                     try {
@@ -58,6 +73,9 @@ export class OpenDashboard {
                     }
                     break;
                 case "auth.logout":
+                    void this.discodeService.updatePresence("offline").catch((error: unknown) => {
+                        console.error("Failed to publish offline presence before sign-out.", error);
+                    });
                     try {
                         await this.authManager.logout();
                     } catch {
@@ -96,12 +114,20 @@ export class OpenDashboard {
 
                     await this.searchGitHubUsers(panel, message.username, message.requestId);
                     break;
+                case "friend.request":
+                    await this.sendFriendRequest(panel, message.githubId);
+                    break;
+                case "friend.accept":
+                    await this.acceptFriendRequest(panel, message.requestId);
+                    break;
             }
         });
 
         const authStateSubscription = this.authManager.onDidChangeAuthentication(
             () => {
-                void this.postAuthenticationState(panel).catch((error: unknown) => {
+                void this.postAuthenticationState(panel)
+                    .then(() => this.refreshSocialData(panel))
+                    .catch((error: unknown) => {
                     console.error("Failed to update dashboard authentication state.", error);
                 });
             }
@@ -115,8 +141,131 @@ export class OpenDashboard {
         panel.onDidDispose(() => {
             authStateSubscription.dispose();
             presenceSubscription.dispose();
+            if (this.socialRefreshInterval) {
+                clearInterval(this.socialRefreshInterval);
+                this.socialRefreshInterval = undefined;
+            }
             this.panel = undefined;
         });
+        this.socialRefreshInterval = setInterval(
+            () => this.refreshSocialData(panel),
+            30_000
+        );
+    }
+
+    private async refreshSocialData(panel: vscode.WebviewPanel): Promise<void> {
+        const session = this.authManager.getSession();
+        if (!session) {
+            await panel.webview.postMessage({
+                type: "social.state",
+                friends: [],
+                requests: [],
+            });
+            return;
+        }
+
+        try {
+            const [friends, requests] = await Promise.all([
+                this.discodeService.getFriends(),
+                this.discodeService.getFriendRequests(),
+            ]);
+            const currentSession = this.authManager.getSession();
+            if (
+                this.panel !== panel
+                || currentSession?.id !== session.id
+                || currentSession.accessToken !== session.accessToken
+            ) {
+                return;
+            }
+            await panel.webview.postMessage({
+                type: "social.state",
+                friends,
+                requests,
+            });
+        } catch (error) {
+            const currentSession = this.authManager.getSession();
+            if (
+                this.panel !== panel
+                || currentSession?.id !== session.id
+                || currentSession.accessToken !== session.accessToken
+            ) {
+                return;
+            }
+            await panel.webview.postMessage({
+                type: "social.error",
+                message: error instanceof Error
+                    ? error.message
+                    : "Unable to load your friends.",
+            });
+        }
+    }
+
+    private async sendFriendRequest(
+        panel: vscode.WebviewPanel,
+        githubId: unknown
+    ): Promise<void> {
+        if (!isGitHubId(githubId)) {
+            await panel.webview.postMessage({
+                type: "friend.requestResult",
+                githubId: String(githubId),
+                status: "error",
+                message: "Choose a valid Discode user.",
+            });
+            return;
+        }
+
+        try {
+            await this.discodeService.sendFriendRequest(githubId);
+            await panel.webview.postMessage({
+                type: "friend.requestResult",
+                githubId: String(githubId),
+                status: "sent",
+            });
+            await this.refreshSocialData(panel);
+        } catch (error) {
+            await panel.webview.postMessage({
+                type: "friend.requestResult",
+                githubId: String(githubId),
+                status: "error",
+                message: error instanceof Error
+                    ? error.message
+                    : "Unable to send the friend request.",
+            });
+        }
+    }
+
+    private async acceptFriendRequest(
+        panel: vscode.WebviewPanel,
+        requestId: unknown
+    ): Promise<void> {
+        if (typeof requestId !== "string") {
+            await panel.webview.postMessage({
+                type: "friend.acceptResult",
+                requestId: "",
+                status: "error",
+                message: "Choose a valid friend request.",
+            });
+            return;
+        }
+
+        try {
+            await this.discodeService.acceptFriendRequest(requestId);
+            await panel.webview.postMessage({
+                type: "friend.acceptResult",
+                requestId,
+                status: "accepted",
+            });
+            await this.refreshSocialData(panel);
+        } catch (error) {
+            await panel.webview.postMessage({
+                type: "friend.acceptResult",
+                requestId,
+                status: "error",
+                message: error instanceof Error
+                    ? error.message
+                    : "Unable to accept the friend request.",
+            });
+        }
     }
 
     private async postPresenceState(panel: vscode.WebviewPanel): Promise<void> {
@@ -744,6 +893,68 @@ export class OpenDashboard {
             white-space: nowrap;
         }
 
+        .friend-list,
+        .friend-request-list {
+            display: grid;
+            gap: var(--space-2);
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .friend-row,
+        .friend-request-row {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            min-width: 0;
+            padding: var(--space-2) 0;
+            border-bottom: 1px solid var(--dc-border);
+        }
+
+        .friend-avatar {
+            width: 34px;
+            height: 34px;
+            flex: 0 0 auto;
+            border-radius: 50%;
+            background: var(--dc-raised);
+        }
+
+        .friend-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .friend-name,
+        .friend-presence {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .friend-name { font-weight: 600; }
+        .friend-presence { color: var(--dc-muted); font-size: 0.88em; }
+
+        .presence-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            margin-right: 5px;
+            border-radius: 50%;
+            background: var(--dot, var(--st-offline));
+        }
+
+        .friend-request-row .btn {
+            flex: 0 0 auto;
+            padding: 6px 10px;
+            font-size: 0.88em;
+        }
+
+        .friend-request-row .btn:disabled {
+            opacity: 0.65;
+            cursor: wait;
+        }
+
         .empty {
             display: flex;
             flex-direction: column;
@@ -928,7 +1139,11 @@ export class OpenDashboard {
                 <div class="stats">
                     <section class="card">
                         <span class="eyebrow">Friends online</span>
-                        <span class="stat-value" id="friendsCount">0</span>
+                        <span class="stat-value" id="friendsOnlineCount">0</span>
+                    </section>
+                    <section class="card">
+                        <span class="eyebrow">Friends offline</span>
+                        <span class="stat-value" id="friendsOfflineCount">0</span>
                     </section>
                 </div>
 
@@ -965,13 +1180,24 @@ export class OpenDashboard {
             <section class="panel">
                 <div class="panel-head">
                     <span class="eyebrow">Friends</span>
-                    <span class="badge">0</span>
+                    <span class="badge" id="friendCount">0</span>
                 </div>
-                <div class="empty">
+                <p class="search-status" id="friendListStatus">Sign in to see your friends.</p>
+                <div class="friend-list" id="friendList"></div>
+                <div class="empty hidden" id="friendListEmpty">
                     <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 010 6.8"/><path d="M18 14.3c2 .7 3.5 2.6 3.5 5.7"/></svg>
-                    <strong>No friends yet</strong>
-                    <span>Friends and their presence will show up here.</span>
+                    <strong>No accepted friends yet</strong>
+                    <span>Search for Discode users to send a friend request.</span>
                 </div>
+            </section>
+
+            <section class="panel hidden" id="friend-requests-panel">
+                <div class="panel-head">
+                    <span class="eyebrow">Friend requests</span>
+                    <span class="badge" id="friendRequestCount">0</span>
+                </div>
+                <p class="search-status" id="friendRequestStatus"></p>
+                <div class="friend-request-list" id="friendRequestList"></div>
             </section>
 
             <section class="panel">
@@ -991,6 +1217,8 @@ export class OpenDashboard {
     <script>
         // Check if running inside VS Code, otherwise fail gracefully so it still works in a standard browser
         const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+        const friendRequestButtons = new Map();
+        const friendAcceptButtons = new Map();
 
         function login() {
             if (vscode) {
@@ -1036,6 +1264,7 @@ export class OpenDashboard {
             document.getElementById('githubSearchButton').disabled = false;
             document.getElementById('githubSearchResult').replaceChildren();
             document.getElementById('githubSearchResult').hidden = true;
+            friendRequestButtons.clear();
 
             if (!username) {
                 document.getElementById('githubSearchStatus').textContent = '';
@@ -1057,6 +1286,7 @@ export class OpenDashboard {
             const result = document.getElementById('githubSearchResult');
             result.replaceChildren();
             result.hidden = true;
+            friendRequestButtons.clear();
 
             if (!username) {
                 document.getElementById('githubSearchStatus').textContent =
@@ -1098,14 +1328,34 @@ export class OpenDashboard {
                     : 'Not on Discode';
                 details.append(username, membership);
 
-                const link = document.createElement('a');
-                link.className = 'search-profile-link';
-                link.href = 'https://github.com/' + encodeURIComponent(user.login);
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                link.textContent = 'View profile';
-
-                profile.append(avatar, details, link);
+                if (user.isRegistered) {
+                    const button = document.createElement('button');
+                    button.className = 'btn btn-secondary';
+                    button.type = 'button';
+                    if (String(user.id) === document.getElementById('userId').textContent) {
+                        button.textContent = 'You';
+                        button.disabled = true;
+                    } else {
+                        button.textContent = 'Send friend request';
+                        button.onclick = () => {
+                            button.disabled = true;
+                            button.textContent = 'Sending…';
+                            document.getElementById('githubSearchStatus').textContent =
+                                'Sending friend request...';
+                            vscode?.postMessage({ type: 'friend.request', githubId: user.id });
+                        };
+                        friendRequestButtons.set(String(user.id), button);
+                    }
+                    profile.append(avatar, details, button);
+                } else {
+                    const link = document.createElement('a');
+                    link.className = 'search-profile-link';
+                    link.href = 'https://github.com/' + encodeURIComponent(user.login);
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = 'View profile';
+                    profile.append(avatar, details, link);
+                }
                 return profile;
             });
 
@@ -1117,6 +1367,94 @@ export class OpenDashboard {
             return status === 'open-to-contribute'
                 ? 'Open to Contribute'
                 : status.charAt(0).toUpperCase() + status.slice(1);
+        }
+
+        function createFriendRow(friend) {
+            const row = document.createElement('div');
+            row.className = 'friend-row';
+
+            try {
+                const avatarUrl = new URL(friend.avatarUrl);
+                if (
+                    avatarUrl.protocol === 'https:'
+                    && avatarUrl.hostname === 'avatars.githubusercontent.com'
+                ) {
+                    const avatar = document.createElement('img');
+                    avatar.className = 'friend-avatar';
+                    avatar.src = avatarUrl.toString();
+                    avatar.alt = '';
+                    row.appendChild(avatar);
+                }
+            } catch {
+                // Skip malformed avatar URLs and keep the friend visible.
+            }
+
+            const details = document.createElement('div');
+            details.className = 'friend-details';
+            const name = document.createElement('span');
+            name.className = 'friend-name';
+            name.textContent = '@' + friend.username;
+            const presence = document.createElement('span');
+            presence.className = 'friend-presence';
+            const dot = document.createElement('span');
+            dot.className = 'presence-dot';
+            dot.dataset.status = friend.status;
+            dot.setAttribute('aria-hidden', 'true');
+            presence.append(dot, document.createTextNode(labelFor(friend.status)));
+            details.append(name, presence);
+            row.appendChild(details);
+            return row;
+        }
+
+        function createFriendRequestRow(request) {
+            const row = document.createElement('div');
+            row.className = 'friend-request-row';
+            const name = document.createElement('span');
+            name.className = 'friend-name';
+            name.textContent = '@' + request.username;
+            const button = document.createElement('button');
+            button.className = 'btn btn-primary';
+            button.type = 'button';
+            button.textContent = 'Accept';
+            button.onclick = () => {
+                button.disabled = true;
+                button.textContent = 'Accepting…';
+                vscode?.postMessage({ type: 'friend.accept', requestId: request.id });
+            };
+            friendAcceptButtons.set(request.id, button);
+            row.append(name, button);
+            return row;
+        }
+
+        function renderSocialState(friends, requests) {
+            const friendList = document.getElementById('friendList');
+            const requestList = document.getElementById('friendRequestList');
+            friendList.replaceChildren(...friends.map(createFriendRow));
+            requestList.replaceChildren(...requests.map(createFriendRequestRow));
+
+            const onlineCount = friends.filter(friend => friend.status !== 'offline').length;
+            document.getElementById('friendsOnlineCount').textContent = String(onlineCount);
+            document.getElementById('friendsOfflineCount').textContent =
+                String(friends.length - onlineCount);
+            document.getElementById('friendCount').textContent = String(friends.length);
+            document.getElementById('friendRequestCount').textContent = String(requests.length);
+            document.getElementById('friendListStatus').textContent = '';
+            document.getElementById('friendListEmpty').classList.toggle('hidden', friends.length > 0);
+            document.getElementById('friend-requests-panel').classList.toggle(
+                'hidden',
+                requests.length === 0
+            );
+            document.getElementById('friendRequestStatus').textContent = requests.length
+                ? 'Review incoming requests.'
+                : '';
+            friendAcceptButtons.clear();
+        }
+
+        function resetSocialState() {
+            renderSocialState([], []);
+            document.getElementById('friendListStatus').textContent = 'Sign in to see your friends.';
+            document.getElementById('friendListEmpty').classList.add('hidden');
+            document.getElementById('friend-requests-panel').classList.add('hidden');
         }
 
         window.addEventListener('message', event => {
@@ -1146,6 +1484,7 @@ export class OpenDashboard {
                     const avatar = document.getElementById('userAvatar');
                     avatar.removeAttribute('src');
                     avatar.hidden = true;
+                    resetSocialState();
                 }
             } else if (message.type === 'presence.state') {
                 const status = message.status;
@@ -1182,6 +1521,39 @@ export class OpenDashboard {
                 }
                 finishGitHubSearch();
                 document.getElementById('githubSearchStatus').textContent = message.message;
+            } else if (message.type === 'social.state') {
+                renderSocialState(message.friends, message.requests);
+            } else if (message.type === 'social.error') {
+                document.getElementById('friendListStatus').textContent = message.message;
+            } else if (message.type === 'friend.requestResult') {
+                const button = friendRequestButtons.get(String(message.githubId));
+                if (!button) {
+                    return;
+                }
+                if (message.status === 'sent') {
+                    button.textContent = 'Request sent';
+                    button.className = 'btn btn-secondary';
+                    document.getElementById('githubSearchStatus').textContent =
+                        'Friend request sent.';
+                } else {
+                    button.disabled = false;
+                    button.textContent = 'Send friend request';
+                    document.getElementById('githubSearchStatus').textContent = message.message;
+                }
+            } else if (message.type === 'friend.acceptResult') {
+                const button = friendAcceptButtons.get(message.requestId);
+                if (!button) {
+                    return;
+                }
+                if (message.status === 'accepted') {
+                    button.textContent = 'Accepted';
+                    document.getElementById('friendRequestStatus').textContent =
+                        'Friend request accepted.';
+                } else {
+                    button.disabled = false;
+                    button.textContent = 'Accept';
+                    document.getElementById('friendRequestStatus').textContent = message.message;
+                }
             }
         });
 

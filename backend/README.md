@@ -34,6 +34,14 @@ of up to 100 positive integer GitHub IDs. It returns matching IDs as strings in
 `registeredGithubIds`, preserving PostgreSQL `BIGINT` values without precision
 loss.
 
+Friends can be added with authenticated `POST /api/friend-requests` using a
+registered user's GitHub ID. Recipients can review incoming requests through
+`GET /api/friend-requests` and accept them with
+`POST /api/friend-requests/:id/accept`. `GET /api/friends` returns accepted
+friends and their current presence. Authenticated `PUT /api/presence` accepts
+one of `online`, `idle`, `focused`, `open-to-contribute`, or `offline`.
+Presence older than 90 seconds is reported as offline.
+
 Set the extension's `discode.backendUrl` setting to the backend base URL. Use
 HTTPS outside localhost so GitHub credentials are protected in transit.
 

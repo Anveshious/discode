@@ -1,0 +1,279 @@
+import { Router } from "express";
+
+const GITHUB_USER_URL = "https://api.github.com/user";
+const PRESENCE_STATUSES = new Set([
+  "online",
+  "idle",
+  "focused",
+  "open-to-contribute",
+  "offline",
+]);
+const GITHUB_ID_MAX = 9223372036854775807n;
+
+function getBearerToken(header) {
+  const match = /^Bearer ([^\s]+)$/i.exec(header ?? "");
+  return match?.[1];
+}
+
+function isGitHubId(value) {
+  if (
+    !(typeof value === "string" && /^\d{1,19}$/.test(value))
+    && !(Number.isSafeInteger(value) && value > 0)
+  ) {
+    return false;
+  }
+
+  try {
+    const id = BigInt(value);
+    return id > 0n && id <= GITHUB_ID_MAX;
+  } catch {
+    return false;
+  }
+}
+
+function isUuid(value) {
+  return typeof value === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
+  const router = Router();
+
+  const authenticate = async (request, response, next) => {
+    const token = getBearerToken(request.get("authorization"));
+    if (!token || token.length > 8192) {
+      response.status(401).json({ error: "github_auth_required" });
+      return;
+    }
+
+    let githubResponse;
+    try {
+      githubResponse = await fetchGitHubUser(GITHUB_USER_URL, {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (error) {
+      console.error("Unable to verify the GitHub identity for a social request.", error);
+      response.status(502).json({ error: "github_verification_unavailable" });
+      return;
+    }
+
+    if (githubResponse.status === 401) {
+      response.status(401).json({ error: "invalid_github_token" });
+      return;
+    }
+    if (!githubResponse.ok) {
+      console.error("GitHub identity verification returned status", githubResponse.status);
+      response.status(502).json({ error: "github_verification_failed" });
+      return;
+    }
+
+    let githubUser;
+    try {
+      githubUser = await githubResponse.json();
+    } catch {
+      response.status(502).json({ error: "github_profile_unavailable" });
+      return;
+    }
+
+    if (!githubUser || !Number.isSafeInteger(githubUser.id) || githubUser.id <= 0) {
+      response.status(502).json({ error: "github_profile_invalid" });
+      return;
+    }
+
+    try {
+      const result = await pool.query(
+        "SELECT id FROM users WHERE github_id = $1",
+        [String(githubUser.id)]
+      );
+      if (result.rows.length === 0) {
+        response.status(403).json({ error: "discode_account_required" });
+        return;
+      }
+
+      request.discodeUserId = result.rows[0].id;
+      request.githubId = String(githubUser.id);
+      next();
+    } catch (error) {
+      console.error("Failed to resolve the authenticated Discode user.", error);
+      response.status(500).json({ error: "social_authentication_failed" });
+    }
+  };
+
+  router.get("/friends", authenticate, async (request, response) => {
+    try {
+      const result = await pool.query(
+        `SELECT
+           friend.github_id,
+           friend.username,
+           friend.name,
+           friend.avatar_url,
+           friend.profile_url,
+           CASE
+             WHEN presence.status IS NOT NULL
+               AND presence.status <> 'offline'
+               AND presence.updated_at >= now() - interval '90 seconds'
+             THEN presence.status
+             ELSE 'offline'
+           END AS status
+         FROM friendships friendship
+         JOIN users friend
+           ON friend.id = CASE
+             WHEN friendship.user_a_id = $1 THEN friendship.user_b_id
+             ELSE friendship.user_a_id
+           END
+         LEFT JOIN user_presence presence ON presence.user_id = friend.id
+         WHERE $1 IN (friendship.user_a_id, friendship.user_b_id)
+           AND friendship.status = 'accepted'
+         ORDER BY lower(friend.username)`,
+        [request.discodeUserId]
+      );
+
+      response.json({
+        friends: result.rows.map((row) => ({
+          githubId: String(row.github_id),
+          username: row.username,
+          name: row.name,
+          avatarUrl: row.avatar_url,
+          profileUrl: row.profile_url,
+          status: row.status,
+        })),
+      });
+    } catch (error) {
+      console.error("Failed to list Discode friends.", error);
+      response.status(500).json({ error: "friend_list_failed" });
+    }
+  });
+
+  router.get("/friend-requests", authenticate, async (request, response) => {
+    try {
+      const result = await pool.query(
+        `SELECT friendship.id, sender.github_id, sender.username, sender.name,
+                sender.avatar_url, sender.profile_url, friendship.created_at
+         FROM friendships friendship
+         JOIN users sender ON sender.id = friendship.requested_by_id
+         WHERE friendship.status = 'pending'
+           AND $1 IN (friendship.user_a_id, friendship.user_b_id)
+           AND friendship.requested_by_id <> $1
+         ORDER BY friendship.created_at`,
+        [request.discodeUserId]
+      );
+      response.json({
+        requests: result.rows.map((row) => ({
+          id: row.id,
+          githubId: String(row.github_id),
+          username: row.username,
+          name: row.name,
+          avatarUrl: row.avatar_url,
+          profileUrl: row.profile_url,
+          createdAt: row.created_at,
+        })),
+      });
+    } catch (error) {
+      console.error("Failed to list incoming friend requests.", error);
+      response.status(500).json({ error: "friend_request_list_failed" });
+    }
+  });
+
+  router.post("/friend-requests", authenticate, async (request, response) => {
+    const githubId = request.body?.githubId;
+    if (!isGitHubId(githubId)) {
+      response.status(400).json({ error: "invalid_github_id" });
+      return;
+    }
+
+    const normalizedGithubId = BigInt(githubId).toString();
+    if (normalizedGithubId === request.githubId) {
+      response.status(400).json({ error: "self_friend_request" });
+      return;
+    }
+
+    try {
+      const recipient = await pool.query(
+        "SELECT id FROM users WHERE github_id = $1",
+        [normalizedGithubId]
+      );
+      if (recipient.rows.length === 0) {
+        response.status(404).json({ error: "discode_user_not_found" });
+        return;
+      }
+
+      const recipientId = recipient.rows[0].id;
+      await pool.query(
+        `INSERT INTO friendships (
+           user_a_id, user_b_id, requested_by_id
+         )
+         VALUES (
+           LEAST($1::uuid, $2::uuid),
+           GREATEST($1::uuid, $2::uuid),
+           $1
+         )`,
+        [request.discodeUserId, recipientId]
+      );
+      response.status(201).json({ status: "pending" });
+    } catch (error) {
+      if (error.code === "23505") {
+        response.status(409).json({ error: "friend_request_exists" });
+        return;
+      }
+      console.error("Failed to create a friend request.", error);
+      response.status(500).json({ error: "friend_request_failed" });
+    }
+  });
+
+  router.post("/friend-requests/:id/accept", authenticate, async (request, response) => {
+    if (!isUuid(request.params.id)) {
+      response.status(400).json({ error: "invalid_friend_request_id" });
+      return;
+    }
+
+    try {
+      const result = await pool.query(
+        `UPDATE friendships
+         SET status = 'accepted', accepted_at = now()
+         WHERE id = $1
+           AND status = 'pending'
+           AND requested_by_id <> $2
+           AND $2 IN (user_a_id, user_b_id)
+         RETURNING id`,
+        [request.params.id, request.discodeUserId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_request_not_found" });
+        return;
+      }
+      response.json({ status: "accepted" });
+    } catch (error) {
+      console.error("Failed to accept a friend request.", error);
+      response.status(500).json({ error: "friend_request_accept_failed" });
+    }
+  });
+
+  router.put("/presence", authenticate, async (request, response) => {
+    const { status } = request.body ?? {};
+    if (!PRESENCE_STATUSES.has(status)) {
+      response.status(400).json({ error: "invalid_presence_status" });
+      return;
+    }
+
+    try {
+      await pool.query(
+        `INSERT INTO user_presence (user_id, status, updated_at)
+         VALUES ($1, $2, now())
+         ON CONFLICT (user_id) DO UPDATE
+         SET status = EXCLUDED.status, updated_at = now()`,
+        [request.discodeUserId, status]
+      );
+      response.json({ status });
+    } catch (error) {
+      console.error("Failed to update Discode presence.", error);
+      response.status(500).json({ error: "presence_update_failed" });
+    }
+  });
+
+  return router;
+}
