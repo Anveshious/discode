@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `backend/README.md`, `backend/src/app.js`, `backend/src/routes/friendRequests.js`, `backend/test/friendRequests.test.js`, `src/services/GitHubService.ts`, and 2 more
 - Staged paths: `backend/README.md`, `backend/src/db/migrations/005_create_friend_requests.sql`
 - Staged paths: `CHANGELOG.md`, `README.md`, `backend/src/app.js`, `backend/src/routes/users.js`, `backend/test/users.test.js`, and 5 more
 - Staged paths: `backend/README.md`, `backend/src/db/migrations/004_hash_invitation_tokens.sql`

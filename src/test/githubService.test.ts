@@ -149,6 +149,34 @@ suite("GitHubService Test Suite", () => {
         assert.deepStrictEqual(await service.searchUsers("unknown"), []);
     });
 
+    test("sends a friend request through the authenticated Discode API", async () => {
+        let request: { path: string; body: unknown } | undefined;
+        const service = new GitHubService({
+            getSession: () => session,
+            handleSessionExpired: async () => false,
+        }, {
+            async post(path: string, body: unknown) {
+                request = { path, body };
+                return {
+                    friendRequest: {
+                        id: "request-id",
+                        requesterId: "requester-id",
+                        recipientId: "recipient-id",
+                        status: "pending",
+                        createdAt: "2026-11-14T00:00:00.000Z",
+                    },
+                };
+            },
+        });
+
+        await service.sendFriendRequest(583232);
+
+        assert.deepStrictEqual(request, {
+            path: "api/friend-requests",
+            body: { recipientGithubId: 583232 },
+        });
+    });
+
     test("rejects invalid usernames without making a GitHub request", async () => {
         let requestMade = false;
         globalThis.fetch = async () => {

@@ -96,6 +96,15 @@ export class OpenDashboard {
 
                     await this.searchGitHubUsers(panel, message.username, message.requestId);
                     break;
+                case "friend.request":
+                    if (
+                        !Number.isSafeInteger(message.githubId)
+                        || message.githubId <= 0
+                    ) {
+                        return;
+                    }
+                    await this.sendFriendRequest(panel, message.githubId);
+                    break;
             }
         });
 
@@ -196,6 +205,52 @@ export class OpenDashboard {
                 type: "github.search.error",
                 requestId,
                 message: error instanceof Error ? error.message : "Unable to search GitHub users.",
+            });
+        }
+    }
+
+    private async sendFriendRequest(
+        panel: vscode.WebviewPanel,
+        recipientGithubId: number
+    ): Promise<void> {
+        const session = this.authManager.getSession();
+        if (!session) {
+            await panel.webview.postMessage({
+                type: "friend.request.result",
+                githubId: recipientGithubId,
+                success: false,
+                message: "Sign in with GitHub to send a friend request.",
+            });
+            return;
+        }
+
+        try {
+            await this.githubService.sendFriendRequest(recipientGithubId);
+            if (
+                this.panel !== panel
+                || this.authManager.getSession()?.id !== session.id
+                || this.authManager.getSession()?.accessToken !== session.accessToken
+            ) {
+                return;
+            }
+            await panel.webview.postMessage({
+                type: "friend.request.result",
+                githubId: recipientGithubId,
+                success: true,
+            });
+        } catch (error) {
+            if (
+                this.panel !== panel
+                || this.authManager.getSession()?.id !== session.id
+                || this.authManager.getSession()?.accessToken !== session.accessToken
+            ) {
+                return;
+            }
+            await panel.webview.postMessage({
+                type: "friend.request.result",
+                githubId: recipientGithubId,
+                success: false,
+                message: error instanceof Error ? error.message : "Unable to send friend request.",
             });
         }
     }
@@ -1012,6 +1067,7 @@ export class OpenDashboard {
 
         let searchDebounceTimer;
         let latestSearchRequestId = 0;
+        let currentGithubId;
 
         function searchGitHubUsers(username, requestId) {
             if (requestId !== latestSearchRequestId) {
@@ -1098,14 +1154,40 @@ export class OpenDashboard {
                     : 'Not on Discode';
                 details.append(username, membership);
 
-                const link = document.createElement('a');
-                link.className = 'search-profile-link';
-                link.href = 'https://github.com/' + encodeURIComponent(user.login);
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                link.textContent = 'View profile';
-
-                profile.append(avatar, details, link);
+                if (user.isRegistered && String(user.id) !== currentGithubId) {
+                    const button = document.createElement('button');
+                    button.className = 'btn btn-secondary search-profile-link';
+                    button.type = 'button';
+                    button.dataset.githubId = String(user.id);
+                    button.textContent = 'Send friend request';
+                    button.addEventListener('click', () => {
+                        button.disabled = true;
+                        button.textContent = 'Sending...';
+                        if (vscode) {
+                            vscode.postMessage({
+                                type: 'friend.request',
+                                githubId: user.id
+                            });
+                        } else {
+                            button.disabled = false;
+                            button.textContent = 'Send friend request';
+                        }
+                    });
+                    profile.append(avatar, details, button);
+                } else if (user.isRegistered) {
+                    const selfLabel = document.createElement('span');
+                    selfLabel.className = 'search-profile-link';
+                    selfLabel.textContent = 'You';
+                    profile.append(avatar, details, selfLabel);
+                } else {
+                    const link = document.createElement('a');
+                    link.className = 'search-profile-link';
+                    link.href = 'https://github.com/' + encodeURIComponent(user.login);
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = 'View profile';
+                    profile.append(avatar, details, link);
+                }
                 return profile;
             });
 
@@ -1122,6 +1204,7 @@ export class OpenDashboard {
         window.addEventListener('message', event => {
             const message = event.data;
             if (message.type === 'auth.profile') {
+                currentGithubId = String(message.user.githubId);
                 document.getElementById('userName').textContent =
                     message.user.name || message.user.username;
                 document.getElementById('userLogin').textContent = message.user.username;
@@ -1140,6 +1223,7 @@ export class OpenDashboard {
                 if (message.authenticated && message.accountLabel) {
                     document.getElementById('userLogin').textContent = message.accountLabel;
                 } else if (!message.authenticated) {
+                    currentGithubId = undefined;
                     document.getElementById('userName').textContent = 'Not signed in';
                     document.getElementById('userLogin').textContent = '—';
                     document.getElementById('userId').textContent = '—';
@@ -1182,6 +1266,23 @@ export class OpenDashboard {
                 }
                 finishGitHubSearch();
                 document.getElementById('githubSearchStatus').textContent = message.message;
+            } else if (message.type === 'friend.request.result') {
+                const buttons = document.querySelectorAll('button[data-github-id]');
+                buttons.forEach(button => {
+                    if (button.dataset.githubId !== String(message.githubId)) {
+                        return;
+                    }
+                    if (message.success) {
+                        button.textContent = 'Request sent';
+                        button.disabled = true;
+                    } else {
+                        button.textContent = 'Send friend request';
+                        button.disabled = false;
+                    }
+                });
+                if (!message.success && typeof message.message === 'string') {
+                    document.getElementById('githubSearchStatus').textContent = message.message;
+                }
             }
         });
 

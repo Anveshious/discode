@@ -41,6 +41,13 @@ themselves, and an active pending request or accepted friendship can exist only
 once per user pair, regardless of direction. Declined or cancelled requests
 remain in the table as history.
 
+`POST /api/friend-requests` sends a request to a registered user. It requires a
+GitHub bearer token and accepts `{ "recipientGithubId": 123456 }`; the requester
+is derived from the verified GitHub identity rather than from client input. The
+endpoint returns the created pending request, rejects unregistered recipients,
+and returns `409` if a pending request or friendship already exists between the
+users.
+
 Set the extension's `discode.backendUrl` setting to the backend base URL. Use
 HTTPS outside localhost so GitHub credentials are protected in transit.
 
