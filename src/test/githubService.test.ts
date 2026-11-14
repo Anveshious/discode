@@ -82,6 +82,61 @@ suite("GitHubService Test Suite", () => {
         assert.strictEqual(await service.findUserByUsername("unknown-user"), undefined);
     });
 
+    test("searches usernames and returns multiple GitHub profiles", async () => {
+        let requestedUrl = "";
+        let requestHeaders: Headers | undefined;
+        globalThis.fetch = async (input, init) => {
+            requestedUrl = String(input);
+            requestHeaders = new Headers(init?.headers);
+            return new Response(JSON.stringify({
+                total_count: 2,
+                incomplete_results: false,
+                items: [
+                    {
+                        id: 583231,
+                        login: "octocat",
+                        avatar_url: "https://avatars.githubusercontent.com/u/583231",
+                        html_url: "https://github.com/octocat",
+                    },
+                    {
+                        id: 583232,
+                        login: "octo-user",
+                        avatar_url: "https://avatars.githubusercontent.com/u/583232",
+                        html_url: "https://github.com/octo-user",
+                    },
+                ],
+            }), { status: 200 });
+        };
+        const service = new GitHubService({
+            getSession: () => session,
+            handleSessionExpired: async () => false,
+        });
+
+        const users = await service.searchUsers(" octo ");
+        const searchUrl = new URL(requestedUrl);
+
+        assert.strictEqual(searchUrl.origin, "https://api.github.com");
+        assert.strictEqual(searchUrl.pathname, "/search/users");
+        assert.strictEqual(searchUrl.searchParams.get("q"), "octo in:login");
+        assert.strictEqual(searchUrl.searchParams.get("per_page"), "5");
+        assert.strictEqual(requestHeaders?.get("authorization"), "Bearer test-token");
+        assert.deepStrictEqual(users.map((user) => user.login), ["octocat", "octo-user"]);
+    });
+
+    test("returns an empty list when username search has no matches", async () => {
+        globalThis.fetch = async () => new Response(JSON.stringify({
+            total_count: 0,
+            incomplete_results: false,
+            items: [],
+        }), { status: 200 });
+        const service = new GitHubService({
+            getSession: () => session,
+            handleSessionExpired: async () => false,
+        });
+
+        assert.deepStrictEqual(await service.searchUsers("unknown"), []);
+    });
+
     test("rejects invalid usernames without making a GitHub request", async () => {
         let requestMade = false;
         globalThis.fetch = async () => {
@@ -94,6 +149,7 @@ suite("GitHubService Test Suite", () => {
         });
 
         await assert.rejects(service.findUserByUsername("not a username"), /valid GitHub username/);
+        await assert.rejects(service.searchUsers("not a username"), /valid GitHub username/);
         assert.strictEqual(requestMade, false);
     });
 

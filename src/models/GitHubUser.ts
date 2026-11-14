@@ -7,3 +7,10 @@ export interface GitHubUser {
     followers: number;
     following: number;
 }
+
+export interface GitHubUserSearchResult {
+    id: number;
+    login: string;
+    avatar_url: string;
+    html_url: string;
+}

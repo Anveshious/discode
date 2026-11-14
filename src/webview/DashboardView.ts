@@ -74,7 +74,7 @@ export class OpenDashboard {
                         await vscode.window.showErrorMessage("Unable to save your presence status.");
                     }
                     break;
-                case "github.searchUser":
+                case "github.searchUsers":
                     if (typeof message.username !== "string") {
                         await panel.webview.postMessage({
                             type: "github.search.error",
@@ -83,7 +83,7 @@ export class OpenDashboard {
                         return;
                     }
 
-                    await this.searchGitHubUser(panel, message.username);
+                    await this.searchGitHubUsers(panel, message.username);
                     break;
             }
         });
@@ -151,7 +151,7 @@ export class OpenDashboard {
         }
     }
 
-    private async searchGitHubUser(panel: vscode.WebviewPanel, username: string): Promise<void> {
+    private async searchGitHubUsers(panel: vscode.WebviewPanel, username: string): Promise<void> {
         const session = this.authManager.getSession();
         if (!session) {
             await panel.webview.postMessage({
@@ -162,14 +162,14 @@ export class OpenDashboard {
         }
 
         try {
-            const user = await this.githubService.findUserByUsername(username);
+            const users = await this.githubService.searchUsers(username);
             if (!this.isCurrentSearch(panel, session)) {
                 return;
             }
 
             await panel.webview.postMessage({
                 type: "github.search.result",
-                user: user ?? null,
+                users,
             });
         } catch (error) {
             if (!this.isCurrentSearch(panel, session)) {
@@ -679,11 +679,16 @@ export class OpenDashboard {
             color: var(--dc-muted);
         }
 
+        .search-results {
+            display: grid;
+            gap: var(--space-2);
+            margin-top: var(--space-3);
+        }
+
         .search-result {
             display: flex;
             align-items: center;
             gap: var(--space-3);
-            margin-top: var(--space-3);
             padding: var(--space-3);
             border: 1px solid var(--dc-border);
             border-radius: var(--radius-sm);
@@ -926,7 +931,7 @@ export class OpenDashboard {
                         id="githubUsername"
                         type="search"
                         aria-label="GitHub username"
-                        placeholder="GitHub username"
+                        placeholder="Search usernames"
                         maxlength="39"
                         autocomplete="off"
                         required
@@ -934,7 +939,7 @@ export class OpenDashboard {
                     <button class="btn btn-primary" id="githubSearchButton" type="submit">Search</button>
                 </form>
                 <p class="search-status" id="githubSearchStatus" role="status" aria-live="polite"></p>
-                <div class="search-result" id="githubSearchResult" hidden></div>
+                <div class="search-results" id="githubSearchResult" hidden></div>
             </section>
 
             <section class="panel">
@@ -1007,7 +1012,7 @@ export class OpenDashboard {
             usernameInput.disabled = true;
             button.disabled = true;
             status.textContent = 'Searching GitHub...';
-            vscode.postMessage({ type: 'github.searchUser', username });
+            vscode.postMessage({ type: 'github.searchUsers', username });
         });
 
         function setViewState(isLoggedIn) {
@@ -1021,29 +1026,35 @@ export class OpenDashboard {
             document.getElementById('githubSearchButton').disabled = false;
         }
 
-        function showGitHubUser(user) {
+        function showGitHubUsers(users) {
             const result = document.getElementById('githubSearchResult');
-            const avatar = document.createElement('img');
-            avatar.className = 'search-avatar';
-            avatar.src = user.avatar_url;
-            avatar.alt = '';
+            const profileCards = users.map(user => {
+                const profile = document.createElement('div');
+                profile.className = 'search-result';
 
-            const details = document.createElement('div');
-            details.className = 'search-user-details';
-            const name = document.createElement('strong');
-            name.textContent = user.name || user.login;
-            const username = document.createElement('span');
-            username.textContent = '@' + user.login;
-            details.append(name, username);
+                const avatar = document.createElement('img');
+                avatar.className = 'search-avatar';
+                avatar.src = user.avatar_url;
+                avatar.alt = '';
 
-            const link = document.createElement('a');
-            link.className = 'search-profile-link';
-            link.href = 'https://github.com/' + encodeURIComponent(user.login);
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.textContent = 'View profile';
+                const details = document.createElement('div');
+                details.className = 'search-user-details';
+                const username = document.createElement('strong');
+                username.textContent = '@' + user.login;
+                details.append(username);
 
-            result.replaceChildren(avatar, details, link);
+                const link = document.createElement('a');
+                link.className = 'search-profile-link';
+                link.href = 'https://github.com/' + encodeURIComponent(user.login);
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.textContent = 'View profile';
+
+                profile.append(avatar, details, link);
+                return profile;
+            });
+
+            result.replaceChildren(...profileCards);
             result.hidden = false;
         }
 
@@ -1093,15 +1104,19 @@ export class OpenDashboard {
                 });
             } else if (message.type === 'github.search.result') {
                 finishGitHubSearch();
-                if (!message.user) {
+                if (!message.users.length) {
                     document.getElementById('githubSearchStatus').textContent =
-                        'No GitHub user found for @' + document.getElementById('githubUsername').value.trim() + '.';
+                        'No GitHub users found matching @'
+                        + document.getElementById('githubUsername').value.trim()
+                        + '.';
                     return;
                 }
 
-                document.getElementById('githubSearchStatus').textContent =
-                    'Found @' + message.user.login + '.';
-                showGitHubUser(message.user);
+                document.getElementById('githubSearchStatus').textContent = message.users.length === 5
+                    ? 'Showing up to 5 matching GitHub users.'
+                    : 'Found ' + message.users.length + ' matching GitHub user'
+                        + (message.users.length === 1 ? '.' : 's.');
+                showGitHubUsers(message.users);
             } else if (message.type === 'github.search.error') {
                 finishGitHubSearch();
                 document.getElementById('githubSearchStatus').textContent = message.message;
