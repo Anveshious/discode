@@ -108,6 +108,7 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] TypeScript-based VS Code extension scaffold.
 - [x] GitHub authentication using VS Code's built-in authentication API.
 - [x] GitHub username, numeric account ID, avatar and profile retrieval.
+- [x] Debounced GitHub username search with up to five public profile matches.
 - [x] Use of the numeric GitHub account ID as the stable identity key; usernames are display/search values.
 - [x] Login, local sign-out, session restoration and authentication-provider change handling.
 - [x] Expired-session handling that signs the user out and requests reauthentication.
@@ -132,7 +133,7 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] GitHub-verified sign-in that creates or updates a Discode account using the numeric GitHub ID.
 - [ ] Backend user API and PostgreSQL schema/migrations.
 - [ ] Discode user registration and profile persistence.
-- [ ] GitHub username search and public profile discovery.
+- [x] GitHub username search and public profile discovery.
 - [ ] Registered-user detection and invitation flow.
 - [ ] Friend requests and connection management.
 - [ ] Real-time online/offline presence across users.
