@@ -1010,29 +1010,61 @@ export class OpenDashboard {
             }
         }
 
-        document.getElementById('githubSearchForm').addEventListener('submit', event => {
-            event.preventDefault();
-            const usernameInput = document.getElementById('githubUsername');
-            const username = usernameInput.value.trim();
-            const status = document.getElementById('githubSearchStatus');
-            const result = document.getElementById('githubSearchResult');
-            const button = document.getElementById('githubSearchButton');
+        let searchDebounceTimer;
+        let latestSearchRequestId = 0;
 
-            result.hidden = true;
-            result.replaceChildren();
-            if (!username) {
-                status.textContent = 'Enter a GitHub username to search.';
+        function searchGitHubUsers(username, requestId) {
+            if (requestId !== latestSearchRequestId) {
                 return;
             }
             if (!vscode) {
-                status.textContent = 'Search is available in the VS Code dashboard.';
+                document.getElementById('githubSearchStatus').textContent =
+                    'Search is available in the VS Code dashboard.';
                 return;
             }
 
-            usernameInput.disabled = true;
-            button.disabled = true;
-            status.textContent = 'Searching GitHub...';
-            vscode.postMessage({ type: 'github.searchUsers', username });
+            document.getElementById('githubSearchButton').disabled = true;
+            document.getElementById('githubSearchStatus').textContent = 'Searching GitHub...';
+            vscode.postMessage({ type: 'github.searchUsers', username, requestId });
+        }
+
+        const githubUsernameInput = document.getElementById('githubUsername');
+        githubUsernameInput.addEventListener('input', () => {
+            const username = githubUsernameInput.value.trim();
+            const requestId = ++latestSearchRequestId;
+            clearTimeout(searchDebounceTimer);
+            document.getElementById('githubSearchButton').disabled = false;
+            document.getElementById('githubSearchResult').replaceChildren();
+            document.getElementById('githubSearchResult').hidden = true;
+
+            if (!username) {
+                document.getElementById('githubSearchStatus').textContent = '';
+                return;
+            }
+
+            document.getElementById('githubSearchStatus').textContent = 'Waiting to search...';
+            searchDebounceTimer = setTimeout(
+                () => searchGitHubUsers(username, requestId),
+                300
+            );
+        });
+
+        document.getElementById('githubSearchForm').addEventListener('submit', event => {
+            event.preventDefault();
+            clearTimeout(searchDebounceTimer);
+            const username = githubUsernameInput.value.trim();
+            const requestId = ++latestSearchRequestId;
+            const result = document.getElementById('githubSearchResult');
+            result.replaceChildren();
+            result.hidden = true;
+
+            if (!username) {
+                document.getElementById('githubSearchStatus').textContent =
+                    'Enter a GitHub username to search.';
+                return;
+            }
+
+            searchGitHubUsers(username, requestId);
         });
 
         function setViewState(isLoggedIn) {
@@ -1042,7 +1074,6 @@ export class OpenDashboard {
         }
 
         function finishGitHubSearch() {
-            document.getElementById('githubUsername').disabled = false;
             document.getElementById('githubSearchButton').disabled = false;
         }
 
@@ -1095,12 +1126,13 @@ export class OpenDashboard {
                 avatar.src = message.user.avatarUrl;
                 avatar.hidden = false;
             } else if (message.type === 'auth.state') {
+                latestSearchRequestId++;
+                clearTimeout(searchDebounceTimer);
+                document.getElementById('githubSearchStatus').textContent = '';
+                document.getElementById('githubSearchResult').hidden = true;
+                document.getElementById('githubSearchResult').replaceChildren();
+                finishGitHubSearch();
                 setViewState(message.authenticated);
-                if (!message.authenticated) {
-                    document.getElementById('githubSearchStatus').textContent = '';
-                    document.getElementById('githubSearchResult').hidden = true;
-                    finishGitHubSearch();
-                }
                 if (message.authenticated && message.accountLabel) {
                     document.getElementById('userLogin').textContent = message.accountLabel;
                 } else if (!message.authenticated) {
@@ -1123,6 +1155,9 @@ export class OpenDashboard {
                     );
                 });
             } else if (message.type === 'github.search.result') {
+                if (message.requestId !== latestSearchRequestId) {
+                    return;
+                }
                 finishGitHubSearch();
                 if (!message.users.length) {
                     document.getElementById('githubSearchStatus').textContent =
@@ -1138,6 +1173,9 @@ export class OpenDashboard {
                         + (message.users.length === 1 ? '.' : 's.');
                 showGitHubUsers(message.users);
             } else if (message.type === 'github.search.error') {
+                if (message.requestId !== latestSearchRequestId) {
+                    return;
+                }
                 finishGitHubSearch();
                 document.getElementById('githubSearchStatus').textContent = message.message;
             }
