@@ -153,6 +153,71 @@ suite("GitHubService Test Suite", () => {
         assert.strictEqual(requestMade, false);
     });
 
+    test("reports primary rate limits with the reset delay", async () => {
+        const resetAt = Math.ceil(Date.now() / 1000) + 90;
+        globalThis.fetch = async () => new Response(JSON.stringify({
+            message: "API rate limit exceeded",
+        }), {
+            status: 403,
+            headers: {
+                "x-ratelimit-remaining": "0",
+                "x-ratelimit-reset": String(resetAt),
+            },
+        });
+        const service = new GitHubService({
+            getSession: () => session,
+            handleSessionExpired: async () => false,
+        });
+
+        await assert.rejects(
+            service.searchUsers("octo"),
+            /GitHub API rate limit reached\. Try again in about 2 minutes\./
+        );
+    });
+
+    test("recognizes secondary rate limits without retry headers", async () => {
+        globalThis.fetch = async () => new Response(JSON.stringify({
+            message: "You have exceeded a secondary rate limit.",
+        }), { status: 403 });
+        const service = new GitHubService({
+            getSession: () => session,
+            handleSessionExpired: async () => false,
+        });
+
+        await assert.rejects(
+            service.searchUsers("octo"),
+            /secondary rate limit reached\. Wait at least one minute/
+        );
+    });
+
+    test("uses Retry-After for rate-limited responses", async () => {
+        globalThis.fetch = async () => new Response(null, {
+            status: 429,
+            headers: { "retry-after": "45" },
+        });
+        const service = new GitHubService({
+            getSession: () => session,
+            handleSessionExpired: async () => false,
+        });
+
+        await assert.rejects(
+            service.searchUsers("octo"),
+            /GitHub API rate limit reached\. Try again in about 45 seconds\./
+        );
+    });
+
+    test("keeps non-rate-limit authorization failures distinct", async () => {
+        globalThis.fetch = async () => new Response(JSON.stringify({
+            message: "Resource not accessible by integration",
+        }), { status: 403 });
+        const service = new GitHubService({
+            getSession: () => session,
+            handleSessionExpired: async () => false,
+        });
+
+        await assert.rejects(service.searchUsers("octo"), /status 403/);
+    });
+
     test("invalidates the active session after an unauthorized response", async () => {
         globalThis.fetch = async () => new Response(null, { status: 401 });
         let invalidatedSession: vscode.AuthenticationSession | undefined;

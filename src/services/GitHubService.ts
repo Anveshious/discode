@@ -123,6 +123,76 @@ async function parseGitHubUserSearchResponse(response: Response): Promise<GitHub
     }));
 }
 
+function getRetryDelaySeconds(response: Response, allowRateLimitReset: boolean): number | undefined {
+    const retryAfter = response.headers.get("retry-after")?.trim();
+    if (retryAfter) {
+        const retryAfterSeconds = Number(retryAfter);
+        if (Number.isFinite(retryAfterSeconds)) {
+            return Math.max(0, Math.ceil(retryAfterSeconds));
+        }
+
+        const retryAt = Date.parse(retryAfter);
+        if (Number.isFinite(retryAt)) {
+            return Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+        }
+    }
+
+    if (!allowRateLimitReset) {
+        return undefined;
+    }
+
+    const resetAtSeconds = Number(response.headers.get("x-ratelimit-reset"));
+    if (Number.isFinite(resetAtSeconds) && resetAtSeconds > 0) {
+        return Math.max(0, Math.ceil(resetAtSeconds - Date.now() / 1000));
+    }
+}
+
+async function getRateLimitMessage(response: Response): Promise<string | undefined> {
+    if (response.status !== 403 && response.status !== 429) {
+        return undefined;
+    }
+
+    const primaryLimitReached = response.headers.get("x-ratelimit-remaining") === "0";
+    let secondaryLimitReached = false;
+    if (response.status === 403 && !primaryLimitReached && !response.headers.has("retry-after")) {
+        try {
+            const body: unknown = await response.clone().json();
+            if (typeof body === "object" && body !== null) {
+                const message = (body as Record<string, unknown>).message;
+                secondaryLimitReached = typeof message === "string"
+                    && /rate limit|abuse detection/i.test(message);
+            }
+        } catch {
+            secondaryLimitReached = false;
+        }
+    }
+
+    if (
+        response.status !== 429
+        && !primaryLimitReached
+        && !response.headers.has("retry-after")
+        && !secondaryLimitReached
+    ) {
+        return undefined;
+    }
+
+    const retryDelaySeconds = getRetryDelaySeconds(response, primaryLimitReached);
+    if (retryDelaySeconds !== undefined && retryDelaySeconds === 0) {
+        return "GitHub API rate limit reached. You can retry now.";
+    }
+    if (retryDelaySeconds !== undefined) {
+        const minutes = Math.ceil(retryDelaySeconds / 60);
+        const retryDelay = retryDelaySeconds < 60
+            ? `${retryDelaySeconds} second${retryDelaySeconds === 1 ? "" : "s"}`
+            : `${minutes} minute${minutes === 1 ? "" : "s"}`;
+        return `GitHub API rate limit reached. Try again in about ${retryDelay}.`;
+    }
+    if (secondaryLimitReached) {
+        return "GitHub API secondary rate limit reached. Wait at least one minute before retrying.";
+    }
+    return "GitHub API rate limit reached. Try again later.";
+}
+
 export class GitHubService {
     constructor(
         private readonly authManager: Pick<AuthManager, "getSession" | "handleSessionExpired">
@@ -134,26 +204,7 @@ export class GitHubService {
             throw new Error("GitHub authentication is required to fetch the current user.");
         }
 
-        let response: Response;
-        try {
-            response = await fetch("https://api.github.com/user", {
-                headers: {
-                    Accept: "application/vnd.github+json",
-                    Authorization: `Bearer ${session.accessToken}`,
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
-            });
-        } catch {
-            throw new Error("Unable to reach the GitHub API.");
-        }
-
-        if (!response.ok) {
-            if (response.status === 401) {
-                await this.handleUnauthorizedResponse(session);
-            }
-            throw new Error(`GitHub API request failed with status ${response.status}.`);
-        }
-
+        const response = await this.request("https://api.github.com/user", session);
         return parseGitHubUserResponse(response);
     }
 
@@ -168,31 +219,14 @@ export class GitHubService {
             throw new Error("Enter a valid GitHub username.");
         }
 
-        let response: Response;
-        try {
-            response = await fetch(
-                `https://api.github.com/users/${encodeURIComponent(normalizedUsername)}`,
-                {
-                    headers: {
-                        Accept: "application/vnd.github+json",
-                        Authorization: `Bearer ${session.accessToken}`,
-                        "X-GitHub-Api-Version": "2022-11-28",
-                    },
-                }
-            );
-        } catch {
-            throw new Error("Unable to reach the GitHub API.");
-        }
+        const response = await this.request(
+            `https://api.github.com/users/${encodeURIComponent(normalizedUsername)}`,
+            session,
+            true
+        );
 
         if (response.status === 404) {
             return undefined;
-        }
-
-        if (response.status === 401) {
-            await this.handleUnauthorizedResponse(session);
-        }
-        if (!response.ok) {
-            throw new Error(`GitHub API request failed with status ${response.status}.`);
         }
 
         return parseGitHubUserResponse(response);
@@ -213,9 +247,18 @@ export class GitHubService {
         searchUrl.searchParams.set("q", `${normalizedQuery} in:login`);
         searchUrl.searchParams.set("per_page", "5");
 
+        const response = await this.request(searchUrl, session);
+        return parseGitHubUserSearchResponse(response);
+    }
+
+    private async request(
+        url: string | URL,
+        session: AuthenticationSession,
+        allowNotFound = false
+    ): Promise<Response> {
         let response: Response;
         try {
-            response = await fetch(searchUrl, {
+            response = await fetch(url, {
                 headers: {
                     Accept: "application/vnd.github+json",
                     Authorization: `Bearer ${session.accessToken}`,
@@ -229,11 +272,15 @@ export class GitHubService {
         if (response.status === 401) {
             await this.handleUnauthorizedResponse(session);
         }
-        if (!response.ok) {
+
+        const rateLimitMessage = await getRateLimitMessage(response);
+        if (rateLimitMessage) {
+            throw new Error(rateLimitMessage);
+        }
+        if (!response.ok && !(allowNotFound && response.status === 404)) {
             throw new Error(`GitHub API request failed with status ${response.status}.`);
         }
-
-        return parseGitHubUserSearchResponse(response);
+        return response;
     }
 
     private async handleUnauthorizedResponse(session: AuthenticationSession): Promise<void> {

@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `src/services/GitHubService.ts`, `src/test/githubService.test.ts`
 - Staged paths: `README.md`, `src/webview/DashboardView.ts`
 - Staged paths: `dev-test.txt`, `src/webview/DashboardView.ts`
 - Staged paths: `src/models/GitHubUser.ts`, `src/services/GitHubService.ts`, `src/test/githubService.test.ts`, `src/webview/DashboardView.ts`
