@@ -85,6 +85,7 @@ suite("GitHubService Test Suite", () => {
     test("searches usernames and returns multiple GitHub profiles", async () => {
         let requestedUrl = "";
         let requestHeaders: Headers | undefined;
+        let membershipRequest: { path: string; body: unknown } | undefined;
         globalThis.fetch = async (input, init) => {
             requestedUrl = String(input);
             requestHeaders = new Headers(init?.headers);
@@ -107,10 +108,16 @@ suite("GitHubService Test Suite", () => {
                 ],
             }), { status: 200 });
         };
+        const api = {
+            async post(path: string, body: unknown) {
+                membershipRequest = { path, body };
+                return { registeredGithubIds: ["583231"] };
+            },
+        };
         const service = new GitHubService({
             getSession: () => session,
             handleSessionExpired: async () => false,
-        });
+        }, api);
 
         const users = await service.searchUsers(" octo ");
         const searchUrl = new URL(requestedUrl);
@@ -121,6 +128,11 @@ suite("GitHubService Test Suite", () => {
         assert.strictEqual(searchUrl.searchParams.get("per_page"), "5");
         assert.strictEqual(requestHeaders?.get("authorization"), "Bearer test-token");
         assert.deepStrictEqual(users.map((user) => user.login), ["octocat", "octo-user"]);
+        assert.deepStrictEqual(membershipRequest, {
+            path: "api/users/registered",
+            body: { githubIds: [583231, 583232] },
+        });
+        assert.deepStrictEqual(users.map((user) => user.isRegistered), [true, false]);
     });
 
     test("returns an empty list when username search has no matches", async () => {

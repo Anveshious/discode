@@ -1,5 +1,6 @@
 import type { AuthenticationSession } from "vscode";
 import type { AuthManager } from "../auth/AuthManager";
+import { ApiService } from "./ApiService";
 import type { GitHubUser, GitHubUserSearchResult } from "../models/GitHubUser";
 
 interface GitHubUserResponse {
@@ -23,6 +24,22 @@ interface GitHubUserSearchItem {
     login: string;
     avatar_url: string;
     html_url: string;
+}
+
+interface RegisteredUsersResponse {
+    registeredGithubIds: string[];
+}
+
+function isRegisteredUsersResponse(value: unknown): value is RegisteredUsersResponse {
+    if (typeof value !== "object" || value === null) {
+        return false;
+    }
+
+    const response = value as Record<string, unknown>;
+    return Array.isArray(response.registeredGithubIds)
+        && response.registeredGithubIds.every(
+            (id) => typeof id === "string" && /^\d+$/.test(id)
+        );
 }
 
 function isGitHubUserResponse(value: unknown): value is GitHubUserResponse {
@@ -100,7 +117,7 @@ async function parseGitHubUserResponse(response: Response): Promise<GitHubUser> 
     };
 }
 
-async function parseGitHubUserSearchResponse(response: Response): Promise<GitHubUserSearchResult[]> {
+async function parseGitHubUserSearchResponse(response: Response): Promise<GitHubUserSearchItem[]> {
     let searchResponse: unknown;
     try {
         searchResponse = await response.json();
@@ -194,9 +211,14 @@ async function getRateLimitMessage(response: Response): Promise<string | undefin
 }
 
 export class GitHubService {
+    private readonly api: Pick<ApiService, "post">;
+
     constructor(
-        private readonly authManager: Pick<AuthManager, "getSession" | "handleSessionExpired">
-    ) {}
+        private readonly authManager: Pick<AuthManager, "getSession" | "handleSessionExpired">,
+        api?: Pick<ApiService, "post">
+    ) {
+        this.api = api ?? new ApiService(authManager);
+    }
 
     public async getCurrentUser(): Promise<GitHubUser> {
         const session = this.authManager.getSession();
@@ -248,7 +270,27 @@ export class GitHubService {
         searchUrl.searchParams.set("per_page", "5");
 
         const response = await this.request(searchUrl, session);
-        return parseGitHubUserSearchResponse(response);
+        const users = await parseGitHubUserSearchResponse(response);
+        if (users.length === 0) {
+            return [];
+        }
+
+        const requestedIds = new Set(users.map((user) => String(user.id)));
+        const membershipResponse = await this.api.post("api/users/registered", {
+            githubIds: users.map((user) => user.id),
+        });
+        if (
+            !isRegisteredUsersResponse(membershipResponse)
+            || membershipResponse.registeredGithubIds.some((id) => !requestedIds.has(id))
+        ) {
+            throw new Error("The Discode backend returned invalid membership information.");
+        }
+
+        const registeredIds = new Set(membershipResponse.registeredGithubIds);
+        return users.map((user) => ({
+            ...user,
+            isRegistered: registeredIds.has(String(user.id)),
+        }));
     }
 
     private async request(

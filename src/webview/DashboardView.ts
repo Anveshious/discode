@@ -1092,7 +1092,11 @@ export class OpenDashboard {
                 details.className = 'search-user-details';
                 const username = document.createElement('strong');
                 username.textContent = '@' + user.login;
-                details.append(username);
+                const membership = document.createElement('span');
+                membership.textContent = user.isRegistered
+                    ? 'On Discode'
+                    : 'Not on Discode';
+                details.append(username, membership);
 
                 const link = document.createElement('a');
                 link.className = 'search-profile-link';
