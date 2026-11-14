@@ -103,58 +103,58 @@ export class OpenDashboard {
                     await this.searchGitHubUsers(panel, message.username, message.requestId);
                     break;
                 case "friend.request":
-                    if (
-                        !Number.isSafeInteger(message.githubId)
-                        || message.githubId <= 0
-                    ) {
+                    {
+                        const githubId = typeof message.githubId === "number"
+                            && Number.isSafeInteger(message.githubId)
+                            ? String(message.githubId)
+                            : message.githubId;
+                        if (typeof githubId !== "string" || !/^[1-9]\d{0,17}$/.test(githubId)) {
+                            return;
+                        }
+                        try {
+                            await this.discodeService.sendFriendRequest(githubId);
+                            await panel.webview.postMessage({
+                                type: "friend.requestResult",
+                                githubId,
+                                status: "sent",
+                            });
+                        } catch (error) {
+                            await panel.webview.postMessage({
+                                type: "friend.requestResult",
+                                githubId,
+                                status: "error",
+                            });
+                            await vscode.window.showErrorMessage(
+                                error instanceof Error
+                                    ? error.message
+                                    : "Unable to send the friend request."
+                            );
+                        }
+                    }
+                    break;
+                case "connections.load":
+                    if (!isConnectionKind(message.kind)) {
                         return;
                     }
-                    await this.sendFriendRequest(panel, message.githubId);
+                    if (!Number.isInteger(message.page) || message.page < 1 || message.page > 100) {
+                        return;
+                    }
+                    await this.postConnections(panel, message.kind, message.page);
                     break;
-                    case "connections.load": {
-    if (!isConnectionKind(message.kind)) {
-        return;
-    }
-    const page = Number.isInteger(message.page) && message.page >= 1 ? message.page : 1;
-    await this.postConnections(panel, message.kind, page);
-    break;
-}
-case "friend.request": {
-    if (typeof message.githubId !== "string" || !/^\d+$/.test(message.githubId)) {
-        return;
-    }
-    try {
-        await this.discodeService.sendFriendRequest(message.githubId);
-        await panel.webview.postMessage({
-            type: "friend.requestResult", githubId: message.githubId, status: "sent",
-        });
-    } catch (error) {
-        await panel.webview.postMessage({
-            type: "friend.requestResult", githubId: message.githubId, status: "error",
-        });
-        await vscode.window.showErrorMessage(
-            error instanceof Error ? error.message : "Unable to send the friend request."
-        );
-    }
-    break;
-}
-case "friend.invite": {
-    if (typeof message.username !== "string" || !GITHUB_USERNAME.test(message.username)) {
-        return;
-    }
-    // Build the URL here; never trust a URL coming from the webview.
-    const invite = `Hey @${message.username}, join me on Discode - a VS Code extension that shows when your friends are coding!`;
-    await vscode.env.clipboard.writeText(invite);
-    await vscode.env.openExternal(
-        vscode.Uri.parse(`https://github.com/${encodeURIComponent(message.username)}`)
-    );
-    void vscode.window.showInformationMessage(
-        "Invite message copied. Share it with them via their GitHub profile."
-    );
-    break;
-}
+                case "friend.invite":
+                    if (typeof message.username !== "string" || !GITHUB_USERNAME.test(message.username)) {
+                        return;
+                    }
+                    const invite = `Hey @${message.username}, join me on Discode - a VS Code extension that shows when your friends are coding!`;
+                    await vscode.env.clipboard.writeText(invite);
+                    await vscode.env.openExternal(
+                        vscode.Uri.parse(`https://github.com/${encodeURIComponent(message.username)}`)
+                    );
+                    void vscode.window.showInformationMessage(
+                        "Invite message copied. Share it with them via their GitHub profile."
+                    );
+                    break;
             }
-            
         });
 
         const authStateSubscription = this.authManager.onDidChangeAuthentication(
@@ -258,52 +258,6 @@ case "friend.invite": {
         }
     }
 
-    private async sendFriendRequest(
-        panel: vscode.WebviewPanel,
-        recipientGithubId: number
-    ): Promise<void> {
-        const session = this.authManager.getSession();
-        if (!session) {
-            await panel.webview.postMessage({
-                type: "friend.request.result",
-                githubId: recipientGithubId,
-                success: false,
-                message: "Sign in with GitHub to send a friend request.",
-            });
-            return;
-        }
-
-        try {
-            await this.githubService.sendFriendRequest(recipientGithubId);
-            if (
-                this.panel !== panel
-                || this.authManager.getSession()?.id !== session.id
-                || this.authManager.getSession()?.accessToken !== session.accessToken
-            ) {
-                return;
-            }
-            await panel.webview.postMessage({
-                type: "friend.request.result",
-                githubId: recipientGithubId,
-                success: true,
-            });
-        } catch (error) {
-            if (
-                this.panel !== panel
-                || this.authManager.getSession()?.id !== session.id
-                || this.authManager.getSession()?.accessToken !== session.accessToken
-            ) {
-                return;
-            }
-            await panel.webview.postMessage({
-                type: "friend.request.result",
-                githubId: recipientGithubId,
-                success: false,
-                message: error instanceof Error ? error.message : "Unable to send friend request.",
-            });
-        }
-    }
-
     private isCurrentSearch(
         panel: vscode.WebviewPanel,
         session: vscode.AuthenticationSession,
@@ -316,24 +270,34 @@ case "friend.invite": {
             && currentSession.accessToken === session.accessToken;
     }
     private async postConnections(
-    panel: vscode.WebviewPanel, kind: ConnectionKind, page: number
-): Promise<void> {
-    try {
-        const result = await this.discodeService.getConnections(kind, page);
-        if (this.panel !== panel) {
-            return;
+        panel: vscode.WebviewPanel,
+        kind: ConnectionKind,
+        page: number
+    ): Promise<void> {
+        try {
+            const result = await this.discodeService.getConnections(kind, page);
+            if (this.panel !== panel) {
+                return;
+            }
+            await panel.webview.postMessage({
+                type: "connections.list",
+                kind,
+                page,
+                hasMore: result.hasMore,
+                items: result.items,
+            });
+        } catch (error) {
+            if (this.panel !== panel) {
+                return;
+            }
+            await panel.webview.postMessage({
+                type: "connections.error",
+                kind,
+                page,
+                message: error instanceof Error ? error.message : "Unable to load the list.",
+            });
         }
-        await panel.webview.postMessage({
-            type: "connections.list", kind, page,
-            hasMore: result.hasMore, items: result.items,
-        });
-    } catch (error) {
-        await panel.webview.postMessage({
-            type: "connections.error", kind, page,
-            message: error instanceof Error ? error.message : "Unable to load the list.",
-        });
     }
-}
 
     private getHtmlContent(): string {
         return `<!DOCTYPE html>
@@ -867,6 +831,66 @@ case "friend.invite": {
             white-space: nowrap;
         }
 
+        .follow-stats {
+            display: flex;
+            gap: 1rem;
+            margin-top: 6px;
+        }
+
+        .link-btn {
+            padding: 0;
+            color: var(--dc-muted);
+            font: inherit;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .link-btn:hover {
+            color: var(--dc-fg);
+            text-decoration: underline;
+        }
+
+        .link-btn b { color: var(--dc-fg); }
+
+        .conn-list {
+            max-height: 320px;
+            overflow-y: auto;
+            margin: 1rem 0;
+            text-align: left;
+        }
+
+        .conn-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--dc-border);
+        }
+
+        .conn-row img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .conn-row .conn-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .conn-row .btn {
+            width: auto;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.8rem;
+        }
+
+        .profile-label {
+            margin: 0;
+            color: var(--dc-muted);
+        }
+
         .empty {
             display: flex;
             flex-direction: column;
@@ -1016,6 +1040,10 @@ case "friend.invite": {
                             <div class="hero-meta">
                                 <span id="userLogin">—</span><span class="sep">·</span>GitHub ID <span id="userId">—</span>
                             </div>
+                            <div class="follow-stats">
+                                <button class="link-btn" type="button" onclick="showConnections('followers')"><b id="followersCount">0</b> followers</button>
+                                <button class="link-btn" type="button" onclick="showConnections('following')"><b id="followingCount">0</b> following</button>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -1058,6 +1086,14 @@ case "friend.invite": {
                 <div class="actions">
                     <button class="btn btn-secondary" type="button" onclick="logout()">Sign Out</button>
                 </div>
+            </div>
+
+            <div id="view-connections" class="view view-section hidden">
+                <div class="page-header header"><h1 id="connTitle">Followers</h1></div>
+                <button class="btn btn-secondary" type="button" onclick="closeConnections()">← Back</button>
+                <div class="conn-list" id="connList"></div>
+                <p class="profile-label" id="connStatus" role="status" aria-live="polite"></p>
+                <button class="btn btn-secondary hidden" type="button" id="connMore" onclick="loadMore()">Load more</button>
             </div>
 
         </main>
@@ -1191,10 +1227,116 @@ case "friend.invite": {
             searchGitHubUsers(username, requestId);
         });
 
+        const VIEWS = ['view-logged-out', 'view-logged-in', 'view-connections'];
+        let connState = { kind: null, page: 1 };
+        const rowButtons = new Map();
+        const AVATAR_PREFIX = 'https://avatars.githubusercontent.com/';
+        const LABELS = { sent: 'Request sent', received: 'Request received', friends: 'Friends' };
+
+        function showView(name) {
+            VIEWS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== name));
+        }
+
         function setViewState(isLoggedIn) {
-            document.getElementById('view-logged-out').classList.toggle('hidden', isLoggedIn);
-            document.getElementById('view-logged-in').classList.toggle('hidden', !isLoggedIn);
+            if (!isLoggedIn) {
+                connState = { kind: null, page: 1 };
+                rowButtons.clear();
+                showView('view-logged-out');
+            } else if (document.getElementById('view-connections').classList.contains('hidden')) {
+                showView('view-logged-in');
+            }
             document.getElementById('github-search-panel').classList.toggle('hidden', !isLoggedIn);
+        }
+
+        function showConnections(kind) {
+            if (kind !== 'followers' && kind !== 'following') {
+                return;
+            }
+            connState = { kind, page: 1 };
+            rowButtons.clear();
+            document.getElementById('connList').replaceChildren();
+            document.getElementById('connTitle').textContent =
+                kind === 'followers' ? 'Followers' : 'Following';
+            document.getElementById('connStatus').textContent = '';
+            const moreButton = document.getElementById('connMore');
+            moreButton.classList.add('hidden');
+            moreButton.disabled = false;
+            showView('view-connections');
+            requestPage();
+        }
+
+        function closeConnections() {
+            connState = { kind: null, page: 1 };
+            rowButtons.clear();
+            showView('view-logged-in');
+        }
+
+        function requestPage() {
+            document.getElementById('connStatus').textContent = 'Loading…';
+            document.getElementById('connMore').disabled = true;
+            if (vscode) {
+                vscode.postMessage({
+                    type: 'connections.load',
+                    kind: connState.kind,
+                    page: connState.page
+                });
+            } else {
+                document.getElementById('connStatus').textContent =
+                    'Connections are available in the VS Code dashboard.';
+            }
+        }
+
+        function loadMore() {
+            if (!connState.kind || connState.page >= 100
+                || document.getElementById('connMore').disabled) {
+                return;
+            }
+            connState.page++;
+            requestPage();
+        }
+
+        function buildRow(item) {
+            const row = document.createElement('div');
+            row.className = 'conn-row';
+            if (typeof item.avatarUrl === 'string' && item.avatarUrl.startsWith(AVATAR_PREFIX)) {
+                const img = document.createElement('img');
+                img.src = item.avatarUrl;
+                img.alt = '';
+                row.appendChild(img);
+            }
+
+            const name = document.createElement('span');
+            name.className = 'conn-name';
+            name.textContent = item.username;
+            row.appendChild(name);
+
+            const button = document.createElement('button');
+            button.className = 'btn btn-primary';
+            button.type = 'button';
+            if (!item.onDiscode) {
+                button.textContent = 'Invite';
+                button.addEventListener('click', () => vscode?.postMessage({
+                    type: 'friend.invite',
+                    username: item.username
+                }));
+            } else if (item.requestStatus && item.requestStatus !== 'none') {
+                button.textContent = LABELS[item.requestStatus];
+                button.className = 'btn btn-secondary';
+                button.disabled = true;
+            } else {
+                button.textContent = 'Send friend request';
+                button.addEventListener('click', () => {
+                    button.disabled = true;
+                    button.textContent = 'Sending…';
+                    vscode?.postMessage({
+                        type: 'friend.request',
+                        githubId: item.githubId
+                    });
+                });
+                rowButtons.set(item.githubId, button);
+            }
+            row.appendChild(button);
+            return row;
         }
 
         function finishGitHubSearch() {
@@ -1277,6 +1419,8 @@ case "friend.invite": {
                     message.user.name || message.user.username;
                 document.getElementById('userLogin').textContent = message.user.username;
                 document.getElementById('userId').textContent = message.user.githubId;
+                document.getElementById('followersCount').textContent = message.user.followers;
+                document.getElementById('followingCount').textContent = message.user.following;
                 const avatar = document.getElementById('userAvatar');
                 avatar.src = message.user.avatarUrl;
                 avatar.hidden = false;
@@ -1295,6 +1439,8 @@ case "friend.invite": {
                     document.getElementById('userName').textContent = 'Not signed in';
                     document.getElementById('userLogin').textContent = '—';
                     document.getElementById('userId').textContent = '—';
+                    document.getElementById('followersCount').textContent = '0';
+                    document.getElementById('followingCount').textContent = '0';
                     const avatar = document.getElementById('userAvatar');
                     avatar.removeAttribute('src');
                     avatar.hidden = true;
@@ -1334,23 +1480,48 @@ case "friend.invite": {
                 }
                 finishGitHubSearch();
                 document.getElementById('githubSearchStatus').textContent = message.message;
-            } else if (message.type === 'friend.request.result') {
-                const buttons = document.querySelectorAll('button[data-github-id]');
-                buttons.forEach(button => {
-                    if (button.dataset.githubId !== String(message.githubId)) {
+            } else if (message.type === 'connections.list') {
+                if (message.kind !== connState.kind || message.page !== connState.page) {
+                    return;
+                }
+                const list = document.getElementById('connList');
+                message.items.forEach(item => list.appendChild(buildRow(item)));
+                document.getElementById('connStatus').textContent =
+                    list.children.length === 0 ? 'Nobody here yet.' : '';
+                const moreButton = document.getElementById('connMore');
+                moreButton.classList.toggle('hidden', !message.hasMore || connState.page >= 100);
+                moreButton.disabled = false;
+            } else if (message.type === 'connections.error') {
+                if (message.kind !== connState.kind || message.page !== connState.page) {
+                    return;
+                }
+                document.getElementById('connStatus').textContent = message.message;
+                const moreButton = document.getElementById('connMore');
+                moreButton.classList.add('hidden');
+                moreButton.disabled = false;
+            } else if (message.type === 'friend.requestResult') {
+                const button = rowButtons.get(message.githubId);
+                if (button) {
+                    if (message.status === 'sent') {
+                        button.textContent = 'Request sent';
+                        button.className = 'btn btn-secondary';
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Send friend request';
+                    }
+                }
+                document.querySelectorAll('button[data-github-id]').forEach(searchButton => {
+                    if (searchButton.dataset.githubId !== String(message.githubId)) {
                         return;
                     }
-                    if (message.success) {
-                        button.textContent = 'Request sent';
-                        button.disabled = true;
+                    if (message.status === 'sent') {
+                        searchButton.textContent = 'Request sent';
+                        searchButton.className = 'btn btn-secondary search-profile-link';
                     } else {
-                        button.textContent = 'Send friend request';
-                        button.disabled = false;
+                        searchButton.disabled = false;
+                        searchButton.textContent = 'Send friend request';
                     }
                 });
-                if (!message.success && typeof message.message === 'string') {
-                    document.getElementById('githubSearchStatus').textContent = message.message;
-                }
             }
         });
 

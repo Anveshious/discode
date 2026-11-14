@@ -30,34 +30,6 @@ interface RegisteredUsersResponse {
     registeredGithubIds: string[];
 }
 
-interface FriendRequestResponse {
-    friendRequest: {
-        id: string;
-        requesterId: string;
-        recipientId: string;
-        status: "pending";
-        createdAt: string;
-    };
-}
-
-function isFriendRequestResponse(value: unknown): value is FriendRequestResponse {
-    if (typeof value !== "object" || value === null) {
-        return false;
-    }
-
-    const friendRequest = (value as Record<string, unknown>).friendRequest;
-    if (typeof friendRequest !== "object" || friendRequest === null) {
-        return false;
-    }
-
-    const request = friendRequest as Record<string, unknown>;
-    return typeof request.id === "string"
-        && typeof request.requesterId === "string"
-        && typeof request.recipientId === "string"
-        && request.status === "pending"
-        && typeof request.createdAt === "string";
-}
-
 function isRegisteredUsersResponse(value: unknown): value is RegisteredUsersResponse {
     if (typeof value !== "object" || value === null) {
         return false;
@@ -319,17 +291,6 @@ export class GitHubService {
             ...user,
             isRegistered: registeredIds.has(String(user.id)),
         }));
-    }
-
-    public async sendFriendRequest(recipientGithubId: number): Promise<void> {
-        if (!Number.isSafeInteger(recipientGithubId) || recipientGithubId <= 0) {
-            throw new Error("The recipient GitHub ID is invalid.");
-        }
-
-        const result = await this.api.post("api/friend-requests", { recipientGithubId });
-        if (!isFriendRequestResponse(result)) {
-            throw new Error("The Discode backend returned an invalid friend request.");
-        }
     }
 
     private async request(

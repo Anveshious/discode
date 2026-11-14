@@ -82,7 +82,7 @@ export class DiscodeService {
 
         return result;
     }
-        public async getConnections(kind: ConnectionKind, page: number): Promise<ConnectionPage> {
+    public async getConnections(kind: ConnectionKind, page: number): Promise<ConnectionPage> {
         const result = await this.api.get(`api/social/${kind}?page=${page}`);
         if (!isConnectionPage(result)) {
             throw new Error("The Discode backend returned an invalid connections list.");
