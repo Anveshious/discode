@@ -29,6 +29,9 @@ subsequent sign-ins, matching accounts only by GitHub's immutable numeric ID.
 The response contains the Discode UUID, GitHub ID, profile fields, registration
 timestamp and preferences. The GitHub token is not stored.
 
+Invitation records have a unique, 244-bit hexadecimal token generated from
+PostgreSQL's cryptographically secure `gen_random_uuid()` function.
+
 Set the extension's `discode.backendUrl` setting to the backend base URL. Use
 HTTPS outside localhost so GitHub credentials are protected in transit.
 
