@@ -39,11 +39,11 @@ suite("ApiService Test Suite", () => {
 
     test("normalizes backend URLs configured with the API route", async () => {
         assert.strictEqual(
-            resolveBackendBaseUrl("http://localhost:3000/api/auth/github").toString(),
+            resolveBackendBaseUrl("http://localhost:8000/api/auth/github").toString(),
             "http://localhost:8000/"
         );
         assert.strictEqual(
-            resolveBackendBaseUrl("http://localhost:3000/api").toString(),
+            resolveBackendBaseUrl("http://localhost:8000/api").toString(),
             "http://localhost:8000/"
         );
     });

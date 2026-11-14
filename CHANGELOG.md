@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `src/test/apiService.test.ts`, `src/test/discodeServer.test.ts`
 - Staged paths: `src/services/DiscodeService.ts`, `src/services/GitHubService.ts`, `src/test/githubService.test.ts`, `src/webview/DashboardView.ts`
 - Staged paths: `backend/src/app.js`, `backend/src/db/migrations/002_create_invitations.sql`, `backend/src/middleware/githubAuth.js`, `backend/src/routes/auth.js`, `backend/src/routes/social.js`, and 4 more
 - Staged paths: `backend/README.md`, `backend/src/app.js`, `backend/src/routes/friendRequests.js`, `backend/test/friendRequests.test.js`, `src/services/GitHubService.ts`, and 2 more
