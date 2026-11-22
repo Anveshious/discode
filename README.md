@@ -44,6 +44,7 @@ Discode will use GitHub's supported APIs for public user search and profile look
 ### 3. Friends and Connections
 
 - Send friend requests to registered Discode users and accept incoming requests.
+- Display incoming friend requests with sender details, avatars, and pending count in the dashboard.
 - Maintain an accepted-friends list inside the Discode dashboard.
 - Show each accepted friend's current status, including online and offline.
 
@@ -122,7 +123,7 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Local presence tracking groundwork.
 - [x] Backend friend requests, acceptance, and accepted-friend listing.
 - [x] Publish presence with a 30-second heartbeat and expire stale presence after 90 seconds.
-- [x] Show accepted friends and incoming requests in the dashboard.
+- [x] Show accepted friends and incoming requests in the dashboard with requester avatars and profile links.
 
 ### In Progress / Needs Integration
 

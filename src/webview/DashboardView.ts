@@ -136,6 +136,7 @@ export class OpenDashboard {
                                 githubId,
                                 status: "sent",
                             });
+                            await this.refreshSocialData(panel);
                         } catch (error) {
                             await panel.webview.postMessage({
                                 type: "friend.requestResult",
@@ -149,6 +150,9 @@ export class OpenDashboard {
                             );
                         }
                     }
+                    break;
+                case "friend.accept":
+                    await this.acceptFriendRequest(panel, message.requestId);
                     break;
                 case "connections.load":
                     if (!isConnectionKind(message.kind)) {
@@ -165,9 +169,6 @@ export class OpenDashboard {
                     }
                     const invite = `Hey @${message.username}, join me on Discode - a VS Code extension that shows when your friends are coding!`;
                     await vscode.env.clipboard.writeText(invite);
-                    await vscode.env.openExternal(
-                        vscode.Uri.parse(`https://github.com/${encodeURIComponent(message.username)}`)
-                    );
                     void vscode.window.showInformationMessage(
                         "Invite message copied. Share it with them via their GitHub profile."
                     );
@@ -969,6 +970,16 @@ export class OpenDashboard {
             color: var(--dc-muted);
         }
 
+        .search-user-details a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .search-user-details a:hover {
+            color: var(--dc-focus);
+            text-decoration: underline;
+        }
+
         .search-profile-link {
             color: var(--dc-focus);
             white-space: nowrap;
@@ -1021,6 +1032,76 @@ export class OpenDashboard {
             flex: 1;
             overflow: hidden;
             text-overflow: ellipsis;
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .conn-row .conn-name:hover {
+            color: var(--dc-focus);
+            text-decoration: underline;
+        }
+
+        .friend-list,
+        .friend-request-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+
+        .friend-row,
+        .friend-request-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-2);
+            padding: var(--space-2) 0;
+            border-bottom: 1px solid var(--dc-border);
+        }
+
+        .friend-row:last-child,
+        .friend-request-row:last-child {
+            border-bottom: none;
+        }
+
+        .friend-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .friend-details {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .friend-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .friend-name:hover {
+            color: var(--dc-focus);
+            text-decoration: underline;
+        }
+
+        .friend-presence {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-1);
+            font-size: 0.85em;
+            color: var(--dc-muted);
+        }
+
+        .friend-request-row .btn {
+            width: auto;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.8rem;
         }
 
         .conn-row .btn {
@@ -1332,6 +1413,7 @@ export class OpenDashboard {
         let searchDebounceTimer;
         let latestSearchRequestId = 0;
         let currentGithubId;
+        let isAuthenticated = false;
 
         function searchGitHubUsers(username, requestId) {
             if (requestId !== latestSearchRequestId) {
@@ -1400,6 +1482,7 @@ export class OpenDashboard {
         }
 
         function setViewState(isLoggedIn) {
+            isAuthenticated = Boolean(isLoggedIn);
             if (!isLoggedIn) {
                 connState = { kind: null, page: 1 };
                 rowButtons.clear();
@@ -1467,8 +1550,11 @@ export class OpenDashboard {
                 row.appendChild(img);
             }
 
-            const name = document.createElement('span');
+            const name = document.createElement('a');
             name.className = 'conn-name';
+            name.href = item.profileUrl || ('https://github.com/' + encodeURIComponent(item.username));
+            name.target = '_blank';
+            name.rel = 'noopener noreferrer';
             name.textContent = item.username;
             row.appendChild(name);
 
@@ -1519,7 +1605,12 @@ export class OpenDashboard {
                 const details = document.createElement('div');
                 details.className = 'search-user-details';
                 const username = document.createElement('strong');
-                username.textContent = '@' + user.login;
+                const usernameLink = document.createElement('a');
+                usernameLink.href = user.html_url || ('https://github.com/' + encodeURIComponent(user.login));
+                usernameLink.target = '_blank';
+                usernameLink.rel = 'noopener noreferrer';
+                usernameLink.textContent = '@' + user.login;
+                username.appendChild(usernameLink);
                 const membership = document.createElement('span');
                 membership.textContent = user.isRegistered
                     ? 'On Discode'
@@ -1601,8 +1692,11 @@ export class OpenDashboard {
 
             const details = document.createElement('div');
             details.className = 'friend-details';
-            const name = document.createElement('span');
+            const name = document.createElement('a');
             name.className = 'friend-name';
+            name.href = friend.profileUrl || ('https://github.com/' + encodeURIComponent(friend.username));
+            name.target = '_blank';
+            name.rel = 'noopener noreferrer';
             name.textContent = '@' + friend.username;
             const presence = document.createElement('span');
             presence.className = 'friend-presence';
@@ -1619,9 +1713,34 @@ export class OpenDashboard {
         function createFriendRequestRow(request) {
             const row = document.createElement('div');
             row.className = 'friend-request-row';
-            const name = document.createElement('span');
+
+            try {
+                const avatarUrl = new URL(request.avatarUrl);
+                if (
+                    avatarUrl.protocol === 'https:'
+                    && avatarUrl.hostname === 'avatars.githubusercontent.com'
+                ) {
+                    const avatar = document.createElement('img');
+                    avatar.className = 'friend-avatar';
+                    avatar.src = avatarUrl.toString();
+                    avatar.alt = '';
+                    row.appendChild(avatar);
+                }
+            } catch {
+                // Skip malformed avatar URLs and keep the row visible.
+            }
+
+            const details = document.createElement('div');
+            details.className = 'friend-details';
+            const name = document.createElement('a');
             name.className = 'friend-name';
+            name.href = request.profileUrl || ('https://github.com/' + encodeURIComponent(request.username));
+            name.target = '_blank';
+            name.rel = 'noopener noreferrer';
             name.textContent = '@' + request.username;
+            details.appendChild(name);
+            row.appendChild(details);
+
             const button = document.createElement('button');
             button.className = 'btn btn-primary';
             button.type = 'button';
@@ -1632,7 +1751,7 @@ export class OpenDashboard {
                 vscode?.postMessage({ type: 'friend.accept', requestId: request.id });
             };
             friendAcceptButtons.set(request.id, button);
-            row.append(name, button);
+            row.appendChild(button);
             return row;
         }
 
@@ -1688,9 +1807,14 @@ export class OpenDashboard {
                 document.getElementById('githubSearchResult').replaceChildren();
                 finishGitHubSearch();
                 setViewState(message.authenticated);
-                if (message.authenticated && message.accountLabel) {
-                    document.getElementById('userLogin').textContent = message.accountLabel;
-                } else if (!message.authenticated) {
+                if (message.authenticated) {
+                    if (message.accountLabel) {
+                        document.getElementById('userLogin').textContent = message.accountLabel;
+                    }
+                    if (document.getElementById('friendListStatus').textContent === 'Sign in to see your friends.') {
+                        document.getElementById('friendListStatus').textContent = 'Loading friends…';
+                    }
+                } else {
                     currentGithubId = undefined;
                     document.getElementById('userName').textContent = 'Not signed in';
                     document.getElementById('userLogin').textContent = '—';
@@ -1756,6 +1880,30 @@ export class OpenDashboard {
                 const moreButton = document.getElementById('connMore');
                 moreButton.classList.add('hidden');
                 moreButton.disabled = false;
+            } else if (message.type === 'social.state') {
+                if (isAuthenticated) {
+                    renderSocialState(message.friends, message.requests);
+                } else {
+                    resetSocialState();
+                }
+            } else if (message.type === 'social.error') {
+                if (isAuthenticated) {
+                    document.getElementById('friendListStatus').textContent = message.message;
+                }
+            } else if (message.type === 'friend.acceptResult') {
+                const button = friendAcceptButtons.get(message.requestId);
+                if (!button) {
+                    return;
+                }
+                if (message.status === 'accepted') {
+                    button.textContent = 'Accepted';
+                    document.getElementById('friendRequestStatus').textContent =
+                        'Friend request accepted.';
+                } else {
+                    button.disabled = false;
+                    button.textContent = 'Accept';
+                    document.getElementById('friendRequestStatus').textContent = message.message;
+                }
             } else if (message.type === 'friend.requestResult') {
                 const button = rowButtons.get(message.githubId);
                 if (button) {
