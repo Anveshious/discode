@@ -1552,13 +1552,19 @@ export class OpenDashboard {
                     selfLabel.textContent = 'You';
                     profile.append(avatar, details, selfLabel);
                 } else {
-                    const link = document.createElement('a');
-                    link.className = 'search-profile-link';
-                    link.href = 'https://github.com/' + encodeURIComponent(user.login);
-                    link.target = '_blank';
-                    link.rel = 'noopener noreferrer';
-                    link.textContent = 'View profile';
-                    profile.append(avatar, details, link);
+                    const button = document.createElement('button');
+                    button.className = 'btn btn-secondary search-profile-link';
+                    button.type = 'button';
+                    button.textContent = 'Invite';
+                    button.addEventListener('click', () => {
+                        if (vscode) {
+                            vscode.postMessage({
+                                type: 'friend.invite',
+                                username: user.login
+                            });
+                        }
+                    });
+                    profile.append(avatar, details, button);
                 }
                 return profile;
             });
