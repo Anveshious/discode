@@ -29,10 +29,24 @@ subsequent sign-ins, matching accounts only by GitHub's immutable numeric ID.
 The response contains the Discode UUID, GitHub ID, profile fields, registration
 timestamp and preferences. The GitHub token is not stored.
 
-`POST /api/users/registered` accepts a JSON body containing a `githubIds` array
-of up to 100 positive integer GitHub IDs. It returns matching IDs as strings in
-`registeredGithubIds`, preserving PostgreSQL `BIGINT` values without precision
-loss.
+Invitation records store only a unique SHA-256 hash of their token. The
+invitation creation flow must generate the random token, hash it, and provide
+the hash when inserting the record; the raw token should only be returned to
+the invite sender.
+
+Friend relationships are represented by `friend_requests`. Each row records
+the requester, recipient, status (`pending`, `accepted`, `declined`, or
+`cancelled`), creation time, and resolution time. A user cannot request
+themselves, and an active pending request or accepted friendship can exist only
+once per user pair, regardless of direction. Declined or cancelled requests
+remain in the table as history.
+
+`POST /api/friend-requests` sends a request to a registered user. It requires a
+GitHub bearer token and accepts `{ "recipientGithubId": 123456 }`; the requester
+is derived from the verified GitHub identity rather than from client input. The
+endpoint returns the created pending request, rejects unregistered recipients,
+and returns `409` if a pending request or friendship already exists between the
+users.
 
 Friends can be added with authenticated `POST /api/friend-requests` using a
 registered user's GitHub ID. Recipients can review incoming requests through

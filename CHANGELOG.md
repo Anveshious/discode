@@ -16,7 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
-- Staged paths: `README.md`, `backend/README.md`, `backend/src/app.js`, `backend/src/db/migrations/002_create_friendships_and_presence.sql`, `backend/src/routes/social.js`, and 7 more
+- Staged paths: `.codex/config.toml`, `CHANGELOG.md`, `backend/README.md`, `backend/src/app.js`, `backend/src/db/migrations/002_create_invitations.sql`, and 12 more
 - Staged paths: `src/models/GitHubUser.ts`, `src/services/GitHubService.ts`, `src/test/githubService.test.ts`, `src/webview/DashboardView.ts`
 - Staged paths: `backend/README.md`, `backend/src/app.js`, `backend/src/routes/users.js`, `backend/test/users.test.js`
 - Staged paths: `src/services/GitHubService.ts`, `src/test/githubService.test.ts`
