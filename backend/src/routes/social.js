@@ -358,6 +358,33 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
     }
   });
 
+  router.post("/friend-requests/:id/decline", authenticate, async (request, response) => {
+    if (!isUuid(request.params.id)) {
+      response.status(400).json({ error: "invalid_friend_request_id" });
+      return;
+    }
+
+    try {
+      const result = await pool.query(
+        `DELETE FROM friendships
+         WHERE id = $1
+           AND status = 'pending'
+           AND requested_by_id <> $2
+           AND $2 IN (user_a_id, user_b_id)
+         RETURNING id`,
+        [request.params.id, request.discodeUserId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_request_not_found" });
+        return;
+      }
+      response.json({ status: "declined" });
+    } catch (error) {
+      console.error("Failed to decline a friend request.", error);
+      response.status(500).json({ error: "friend_request_decline_failed" });
+    }
+  });
+
   router.put("/presence", authenticate, async (request, response) => {
     const { status } = request.body ?? {};
     if (!PRESENCE_STATUSES.has(status)) {

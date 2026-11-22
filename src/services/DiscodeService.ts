@@ -187,6 +187,20 @@ export class DiscodeService {
         }
     }
 
+    public async declineFriendRequest(requestId: string): Promise<void> {
+        const result = await this.api.post(
+            `api/friend-requests/${encodeURIComponent(requestId)}/decline`,
+            {}
+        );
+        if (
+            typeof result !== "object"
+            || result === null
+            || (result as Record<string, unknown>).status !== "declined"
+        ) {
+            throw new Error("The Discode backend returned an invalid friend request result.");
+        }
+    }
+
     public async updatePresence(status: PresenceStatusValue): Promise<void> {
         const result = await this.api.request("api/presence", {
             method: "PUT",

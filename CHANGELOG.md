@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/services/DiscodeService.ts`, `src/webview/DashboardView.ts`
 - Staged paths: `README.md`, `src/webview/DashboardView.ts`
 - Staged paths: `src/webview/DashboardView.ts`
 - Staged paths: `backend/src/app.js`, `backend/src/db/migrations/002_create_invitations.sql`, `backend/src/db/migrations/005_create_friend_requests.sql`, `backend/src/routes/auth.js`, `backend/src/routes/friendRequests.js`, and 2 more

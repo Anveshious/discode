@@ -154,6 +154,9 @@ export class OpenDashboard {
                 case "friend.accept":
                     await this.acceptFriendRequest(panel, message.requestId);
                     break;
+                case "friend.decline":
+                    await this.declineFriendRequest(panel, message.requestId);
+                    break;
                 case "connections.load":
                     if (!isConnectionKind(message.kind)) {
                         return;
@@ -317,6 +320,40 @@ export class OpenDashboard {
                 message: error instanceof Error
                     ? error.message
                     : "Unable to accept the friend request.",
+            });
+        }
+    }
+
+    private async declineFriendRequest(
+        panel: vscode.WebviewPanel,
+        requestId: unknown
+    ): Promise<void> {
+        if (typeof requestId !== "string") {
+            await panel.webview.postMessage({
+                type: "friend.declineResult",
+                requestId: "",
+                status: "error",
+                message: "Choose a valid friend request.",
+            });
+            return;
+        }
+
+        try {
+            await this.discodeService.declineFriendRequest(requestId);
+            await panel.webview.postMessage({
+                type: "friend.declineResult",
+                requestId,
+                status: "declined",
+            });
+            await this.refreshSocialData(panel);
+        } catch (error) {
+            await panel.webview.postMessage({
+                type: "friend.declineResult",
+                requestId,
+                status: "error",
+                message: error instanceof Error
+                    ? error.message
+                    : "Unable to decline the friend request.",
             });
         }
     }
@@ -1098,6 +1135,11 @@ export class OpenDashboard {
             color: var(--dc-muted);
         }
 
+        .friend-request-actions {
+            display: inline-flex;
+            gap: var(--space-1);
+        }
+
         .friend-request-row .btn {
             width: auto;
             padding: 0.35rem 0.7rem;
@@ -1391,6 +1433,7 @@ export class OpenDashboard {
         const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
         const friendRequestButtons = new Map();
         const friendAcceptButtons = new Map();
+        const friendDeclineButtons = new Map();
 
         function login() {
             if (vscode) {
@@ -1741,17 +1784,37 @@ export class OpenDashboard {
             details.appendChild(name);
             row.appendChild(details);
 
-            const button = document.createElement('button');
-            button.className = 'btn btn-primary';
-            button.type = 'button';
-            button.textContent = 'Accept';
-            button.onclick = () => {
-                button.disabled = true;
-                button.textContent = 'Accepting…';
+            const actions = document.createElement('div');
+            actions.className = 'friend-request-actions';
+
+            const acceptButton = document.createElement('button');
+            acceptButton.className = 'btn btn-primary';
+            acceptButton.type = 'button';
+            acceptButton.textContent = 'Accept';
+
+            const declineButton = document.createElement('button');
+            declineButton.className = 'btn btn-secondary';
+            declineButton.type = 'button';
+            declineButton.textContent = 'Decline';
+
+            acceptButton.onclick = () => {
+                acceptButton.disabled = true;
+                declineButton.disabled = true;
+                acceptButton.textContent = 'Accepting…';
                 vscode?.postMessage({ type: 'friend.accept', requestId: request.id });
             };
-            friendAcceptButtons.set(request.id, button);
-            row.appendChild(button);
+
+            declineButton.onclick = () => {
+                acceptButton.disabled = true;
+                declineButton.disabled = true;
+                declineButton.textContent = 'Declining…';
+                vscode?.postMessage({ type: 'friend.decline', requestId: request.id });
+            };
+
+            friendAcceptButtons.set(request.id, acceptButton);
+            friendDeclineButtons.set(request.id, declineButton);
+            actions.append(acceptButton, declineButton);
+            row.appendChild(actions);
             return row;
         }
 
@@ -1777,6 +1840,7 @@ export class OpenDashboard {
                 ? 'Review incoming requests.'
                 : '';
             friendAcceptButtons.clear();
+            friendDeclineButtons.clear();
         }
 
         function resetSocialState() {
@@ -1892,17 +1956,35 @@ export class OpenDashboard {
                 }
             } else if (message.type === 'friend.acceptResult') {
                 const button = friendAcceptButtons.get(message.requestId);
-                if (!button) {
-                    return;
+                const declineBtn = friendDeclineButtons.get(message.requestId);
+                if (button) {
+                    if (message.status === 'accepted') {
+                        button.textContent = 'Accepted';
+                        if (declineBtn) { declineBtn.remove(); }
+                        document.getElementById('friendRequestStatus').textContent =
+                            'Friend request accepted.';
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Accept';
+                        if (declineBtn) { declineBtn.disabled = false; }
+                        document.getElementById('friendRequestStatus').textContent = message.message;
+                    }
                 }
-                if (message.status === 'accepted') {
-                    button.textContent = 'Accepted';
-                    document.getElementById('friendRequestStatus').textContent =
-                        'Friend request accepted.';
-                } else {
-                    button.disabled = false;
-                    button.textContent = 'Accept';
-                    document.getElementById('friendRequestStatus').textContent = message.message;
+            } else if (message.type === 'friend.declineResult') {
+                const button = friendDeclineButtons.get(message.requestId);
+                const acceptBtn = friendAcceptButtons.get(message.requestId);
+                if (button) {
+                    if (message.status === 'declined') {
+                        button.textContent = 'Declined';
+                        if (acceptBtn) { acceptBtn.remove(); }
+                        document.getElementById('friendRequestStatus').textContent =
+                            'Friend request declined.';
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Decline';
+                        if (acceptBtn) { acceptBtn.disabled = false; }
+                        document.getElementById('friendRequestStatus').textContent = message.message;
+                    }
                 }
             } else if (message.type === 'friend.requestResult') {
                 const button = rowButtons.get(message.githubId);
