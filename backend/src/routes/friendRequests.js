@@ -11,8 +11,12 @@ function getBearerToken(header) {
 export function createFriendRequestsRouter({ pool, fetchGitHubUser = fetch }) {
   const router = Router();
 
-  router.post("/friend-requests", async (request, response) => {
+  router.post("/friend-requests", async (request, response, next) => {
     const recipientGithubId = request.body?.recipientGithubId;
+    if (recipientGithubId === undefined && request.body?.githubId !== undefined) {
+      next();
+      return;
+    }
     if (!Number.isSafeInteger(recipientGithubId) || recipientGithubId <= 0) {
       response.status(400).json({ error: "invalid_recipient_github_id" });
       return;
