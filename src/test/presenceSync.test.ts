@@ -135,4 +135,61 @@ suite("PresenceSync Test Suite", () => {
         presenceManager.dispose();
         authEmitter.dispose();
     });
+
+    test("immediately synchronizes manual presence state changes to the backend", async () => {
+        const session = createMockSession();
+        const authEmitter = new vscode.EventEmitter<boolean>();
+
+        const mockAuthManager = {
+            getSession: () => session,
+            onDidChangeAuthentication: authEmitter.event,
+        } as unknown as AuthManager;
+
+        const globalStateValues = new Map<string, unknown>();
+        const mockGlobalState: Pick<vscode.Memento, "get" | "update"> = {
+            get: <T>(key: string, defaultValue?: T) => (globalStateValues.has(key) ? (globalStateValues.get(key) as T) : defaultValue),
+            update: async (key: string, value: unknown) => {
+                if (value === undefined) { globalStateValues.delete(key); } else { globalStateValues.set(key, value); }
+            },
+        };
+        const presenceManager = new PresenceManager(mockGlobalState);
+        await presenceManager.initialize();
+
+        const publishedStatuses: PresenceStatusValue[] = [];
+        const mockDiscodeService = {
+            signIn: async () => ({ user: { id: "u-1", githubId: "12345", username: "testuser", name: "Test", avatarUrl: "", profileUrl: "" }, created: false }),
+            updatePresence: async (status: PresenceStatusValue) => {
+                publishedStatuses.push(status);
+            },
+            getFriendRequests: async () => [],
+        } as unknown as DiscodeService;
+
+        // Long heartbeat so only manual changes trigger publishes
+        const sync = new PresenceSync(
+            mockAuthManager,
+            presenceManager,
+            new FriendRequestNotifier(),
+            mockDiscodeService,
+            60_000
+        );
+
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 30));
+            assert.strictEqual(publishedStatuses[0], "offline");
+
+            // Change to focused
+            await presenceManager.setManualStatus("focused");
+            await new Promise((resolve) => setTimeout(resolve, 30));
+            assert.strictEqual(publishedStatuses[publishedStatuses.length - 1], "focused");
+
+            // Change to open-to-contribute
+            await presenceManager.setManualStatus("open-to-contribute");
+            await new Promise((resolve) => setTimeout(resolve, 30));
+            assert.strictEqual(publishedStatuses[publishedStatuses.length - 1], "open-to-contribute");
+        } finally {
+            sync.dispose();
+            presenceManager.dispose();
+            authEmitter.dispose();
+        }
+    });
 });

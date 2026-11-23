@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `README.md`, `package.json`, `src/commands/CommandManager.ts`, `src/test/presenceSync.test.ts`
 - Staged paths: `README.md`, `package.json`, `src/core/ExtensionController.ts`, `src/presence/presenceTracker.ts`, `src/test/presenceTracker.test.ts`
 - Staged paths: `README.md`, `package.json`, `src/services/PresenceSync.ts`, `src/test/presenceSync.test.ts`
 - Staged paths: `CHANGELOG.md`, `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/commands/CommandManager.ts`, and 7 more

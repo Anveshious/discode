@@ -63,7 +63,7 @@ Discode is intended to support the following statuses:
 | Open to Contribute | Available for collaboration |
 | Offline | Not connected to Discode |
 
-Users should be able to select a status manually, while automatic activity detection provides supporting presence information. Manual status and connection state remain distinct. The extension publishes a
+Users should be able to select a status manually (via the Discode dashboard or `discode.setPresenceStatus` in the Command Palette), while automatic activity detection provides supporting presence information. Manual status and connection state remain distinct. Changes to manual status immediately synchronize with the Discode backend API. The extension publishes a
 configurable presence heartbeat (defaulting to every 30 seconds via `discode.heartbeatIntervalSeconds`); friends are shown as offline when their
 last update is more than 90 seconds old.
 
@@ -119,7 +119,7 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Reusable Discode dashboard opened through `discode.openDashboard`.
 - [x] Status bar presence item.
 - [x] Detect active editor usage, inactivity-to-Idle transitions, and VS Code focus loss with configurable timeout (`discode.idleTimeoutMinutes`).
-- [x] Manual Focused and Open to Contribute overrides, stored separately from automatic activity.
+- [x] Manual Focused and Open to Contribute overrides, synchronized immediately to backend with command palette support (`discode.setPresenceStatus`).
 - [x] Modular extension structure separating authentication, commands, services, models and UI.
 - [x] Initial presence-status definitions, including Online, Idle, Focused and Open to Contribute.
 - [x] Local presence tracking groundwork.

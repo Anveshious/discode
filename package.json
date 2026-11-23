@@ -18,6 +18,10 @@
       {
         "command": "discode.openDashboard",
         "title": "Open Discode Dashboard"
+      },
+      {
+        "command": "discode.setPresenceStatus",
+        "title": "Discode: Set Presence Status"
       }
     ],
     "configuration": {
