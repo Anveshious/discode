@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { AuthManager } from "../auth/AuthManager";
 import { ApiError } from "../services/ApiService";
 import { DiscodeService } from "../services/DiscodeService";
+import { FriendRequestNotifier } from "../services/FriendRequestNotifier";
 import { GitHubService } from "../services/GitHubService";
 import { ManualPresenceStatus } from "../models/PresenceStatus";
 import { PresenceManager } from "../services/PresenceManager";
@@ -42,7 +43,8 @@ export class OpenDashboard {
 
     constructor(
         private readonly authManager: AuthManager,
-        private readonly presenceManager: PresenceManager
+        private readonly presenceManager: PresenceManager,
+        private readonly friendRequestNotifier: FriendRequestNotifier = new FriendRequestNotifier()
     ) {
         this.discodeService = new DiscodeService(authManager);
         this.githubService = new GitHubService(authManager);
@@ -240,6 +242,7 @@ export class OpenDashboard {
                 return;
             }
             this.currentFriendGithubIds = new Set(friends.map((friend) => String(friend.githubId)));
+            this.friendRequestNotifier.processRequests(requests);
             await panel.webview.postMessage({
                 type: "social.state",
                 friends,
@@ -469,6 +472,7 @@ export class OpenDashboard {
         if (!session) {
             this.currentGithubId = undefined;
             this.currentFriendGithubIds.clear();
+            this.friendRequestNotifier.reset();
             return;
         }
 
