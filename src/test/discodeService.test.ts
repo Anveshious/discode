@@ -120,6 +120,18 @@ suite("DiscodeService Test Suite", () => {
         await service.updatePresence("online");
     });
 
+    test("fetches presence status using an authenticated GET request", async () => {
+        const service = createService(async (input, init) => {
+            assert.ok(String(input).endsWith("/api/presence"));
+            assert.equal(init?.method ?? "GET", "GET");
+            return new Response(JSON.stringify({ status: "online", updatedAt: "2026-11-23T23:00:00Z" }));
+        });
+
+        const result = await service.getPresence();
+        assert.equal(result.status, "online");
+        assert.equal(result.updatedAt, "2026-11-23T23:00:00Z");
+    });
+
     test("removes a friend using an authenticated DELETE request", async () => {
         const service = createService(async (input, init) => {
             assert.ok(String(input).endsWith("/api/friends/123456"));

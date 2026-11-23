@@ -518,6 +518,36 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
     }
   });
 
+  router.get("/presence", authenticate, async (request, response) => {
+    try {
+      const result = await pool.query(
+        `SELECT
+           CASE
+             WHEN status IS NOT NULL
+               AND status <> 'offline'
+               AND updated_at >= now() - interval '90 seconds'
+             THEN status
+             ELSE 'offline'
+           END AS status,
+           updated_at
+         FROM user_presence
+         WHERE user_id = $1`,
+        [request.discodeUserId]
+      );
+      if (result.rows.length === 0) {
+        response.json({ status: "offline", updatedAt: null });
+        return;
+      }
+      response.json({
+        status: result.rows[0].status,
+        updatedAt: result.rows[0].updated_at,
+      });
+    } catch (error) {
+      console.error("Failed to query user presence.", error);
+      response.status(500).json({ error: "presence_query_failed" });
+    }
+  });
+
   router.put("/presence", authenticate, async (request, response) => {
     const { status } = request.body ?? {};
     if (!PRESENCE_STATUSES.has(status)) {

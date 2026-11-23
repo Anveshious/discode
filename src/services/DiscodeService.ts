@@ -242,6 +242,23 @@ export class DiscodeService {
             throw new Error("The Discode backend returned an invalid presence result.");
         }
     }
+
+    public async getPresence(): Promise<{ status: PresenceStatusValue; updatedAt: string | null }> {
+        const result = await this.api.get("api/presence");
+        if (
+            typeof result !== "object"
+            || result === null
+            || !isPresenceStatus((result as Record<string, unknown>).status)
+        ) {
+            throw new Error("The Discode backend returned an invalid presence result.");
+        }
+        return {
+            status: (result as Record<string, unknown>).status as PresenceStatusValue,
+            updatedAt: typeof (result as Record<string, unknown>).updatedAt === "string"
+                ? (result as Record<string, unknown>).updatedAt as string
+                : null,
+        };
+    }
     public async getConnections(kind: ConnectionKind, page: number): Promise<ConnectionPage> {
         const result = await this.api.get(`api/social/${kind}?page=${page}`);
         if (!isConnectionPage(result)) {

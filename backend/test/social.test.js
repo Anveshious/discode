@@ -473,6 +473,54 @@ test("handles disconnecting clients by setting presence to offline", async () =>
   assert.deepEqual(updatedValues, ["self-user-id", "offline"]);
 });
 
+test("prevents stale online status when user presence has not been refreshed within 90 seconds", async () => {
+  const staleUpdatedAt = new Date(Date.now() - 120_000).toISOString();
+  const staleResponse = await requestSocial({
+    pool: createPool(async (sql, values) => {
+      assert.match(sql, /interval '90 seconds'/);
+      assert.deepEqual(values, ["self-user-id"]);
+      return {
+        rows: [{
+          status: "offline",
+          updated_at: staleUpdatedAt,
+        }],
+      };
+    }),
+    path: "/presence",
+    method: "GET",
+  });
+
+  assert.equal(staleResponse.status, 200);
+  const staleData = await staleResponse.json();
+  assert.deepEqual(staleData, {
+    status: "offline",
+    updatedAt: staleUpdatedAt,
+  });
+
+  const freshUpdatedAt = new Date().toISOString();
+  const freshResponse = await requestSocial({
+    pool: createPool(async (sql, values) => {
+      assert.match(sql, /interval '90 seconds'/);
+      assert.deepEqual(values, ["self-user-id"]);
+      return {
+        rows: [{
+          status: "online",
+          updated_at: freshUpdatedAt,
+        }],
+      };
+    }),
+    path: "/presence",
+    method: "GET",
+  });
+
+  assert.equal(freshResponse.status, 200);
+  const freshData = await freshResponse.json();
+  assert.deepEqual(freshData, {
+    status: "online",
+    updatedAt: freshUpdatedAt,
+  });
+});
+
 test("marks follower Discode membership and request status", async () => {
   const followers = [
     {
