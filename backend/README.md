@@ -62,6 +62,19 @@ HTTPS outside localhost so GitHub credentials are protected in transit.
 Configure the service with `PORT` and `DATABASE_URL`; see `.env.example`.
 Never commit `.env` or use the development connection credentials in production.
 
+## Embedded SQLite Backend
+
+In addition to PostgreSQL, the backend supports a self-contained embedded mode powered by SQLite (`better-sqlite3`). The extension launches this automatically when `discode.backendUrl` is set to `"embedded"` (the default).
+
+- `src/sqlite-server.js` — embedded entry point accepting `--db-path` and `--port` CLI arguments (prints assigned port as JSON to stdout).
+- `src/db/sqlite-pool.js` — adapts SQLite to the `pg.Pool` interface (`query(sql, values)`), with SQL dialect translation and constraint error mapping.
+- `src/db/sqlite-migrate.js` — initializes the SQLite schema matching PostgreSQL migrations.
+
+Run embedded server manually:
+```bash
+node src/sqlite-server.js --db-path ./discode.db --port 8000
+```
+
 ## Commands
 
 - `npm start` — start the API

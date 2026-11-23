@@ -46,11 +46,27 @@ export function resolveBackendBaseUrl(configuredUrl: string): URL {
     return url;
 }
 
+let backendUrlOverride: string | undefined;
+
+export function setBackendUrlOverride(url: string | undefined): void {
+    backendUrlOverride = url;
+}
+
+export function getBackendUrlOverride(): string | undefined {
+    return backendUrlOverride;
+}
+
 function getBackendBaseUrl(): URL {
+    if (backendUrlOverride) {
+        return resolveBackendBaseUrl(backendUrlOverride);
+    }
     const configuredUrl = vscode.workspace.getConfiguration("discode").get<string>(
         "backendUrl",
-        "http://localhost:8000"
+        "embedded"
     );
+    if (configuredUrl === "embedded") {
+        throw new Error("Discode embedded backend is not running.");
+    }
     return resolveBackendBaseUrl(configuredUrl);
 }
 

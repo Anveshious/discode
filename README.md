@@ -144,6 +144,7 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Publish presence with a configurable heartbeat interval (`discode.heartbeatIntervalSeconds`) and expire stale presence after 90 seconds.
 - [x] Show accepted friends and incoming requests in the dashboard with requester avatars and profile links.
 - [x] Remove existing friends with instant UI updates and backend synchronization.
+- [x] Self-contained embedded backend mode with SQLite (`better-sqlite3`) for zero-config operation without Docker or PostgreSQL.
 
 ### In Progress / Needs Integration
 
@@ -179,8 +180,8 @@ The extension is being developed with a modular architecture so that authenticat
 |---|---|---|
 | VS Code extension | TypeScript, VS Code Extension API | Authentication, editor integration, commands and notifications |
 | Dashboard | VS Code Webview; React as a future option | Social interface and user interactions |
-| Backend | Node.js, Express | User registration, profiles, friend relationships and API |
-| Database | PostgreSQL | Persistent users, connections and preferences |
+| Backend | Node.js, Express (Embedded SQLite or Remote PostgreSQL) | User registration, profiles, friend relationships and API |
+| Database | SQLite (embedded, zero-config) / PostgreSQL (server) | Persistent users, connections and preferences |
 | Presence transport | Authenticated REST heartbeat and dashboard polling | Friend presence synchronization with stale-presence expiry |
 | Identity and discovery | GitHub Authentication API and GitHub REST API | Authentication and public profile lookup |
 
@@ -188,11 +189,18 @@ The extension is being developed with a modular architecture so that authenticat
 
 ```mermaid
 flowchart TD
-    A[VS Code Extension] <-->|HTTPS| B[Discode Backend]
-    A --> C[Discode Dashboard]
-    B <--> D[(PostgreSQL Database)]
-    B <--> E[GitHub API]
+    A[VS Code Extension] -->|Default: embedded mode| B1[Embedded SQLite Express Server]
+    B1 --> C1[(Local SQLite discode.db)]
+    A -.->|Configured URL| B2[Remote Discode Backend]
+    B2 <--> C2[(PostgreSQL Database)]
+    A --> D[Discode Dashboard]
+    B1 <--> E[GitHub API]
+    B2 <--> E
 ```
+
+Discode supports two operation modes:
+1. **Embedded Mode (Default):** Zero configuration. When the extension activates, it automatically spins up an embedded Node.js Express server backed by SQLite (`better-sqlite3`). The database is stored locally in the extension's global storage directory (`discode.db`). No Docker, PostgreSQL, or manual server startup is needed.
+2. **Server Mode:** By setting `discode.backendUrl` to an HTTP/S endpoint (such as `http://localhost:8000` or a remote server URL), the extension connects to a standalone or multi-user backend backed by PostgreSQL.
 
 The GitHub authentication provider establishes the user's identity in the extension. The backend independently verifies the identity presented by the extension before creating or accessing a Discode account. The backend manages Discode-specific data and limits shared presence to accepted friends.
 

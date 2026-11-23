@@ -6,6 +6,8 @@ import { PresenceManager } from "../services/PresenceManager";
 import { PresenceSync } from "../services/PresenceSync";
 import { FriendRequestNotifier } from "../services/FriendRequestNotifier";
 import { PresenceTracker } from "../presence/presenceTracker";
+import { EmbeddedServer } from "../services/EmbeddedServer";
+import { setBackendUrlOverride } from "../services/ApiService";
 
 function getIdleThresholdMs(): number {
     const minutes = vscode.workspace.getConfiguration("discode").get<number>(
@@ -23,7 +25,8 @@ export class ExtensionController implements vscode.Disposable {
     private commandManager: CommandManager;
     private authManager: AuthManager;
     private presenceManager: PresenceManager;
-    private presenceSync: PresenceSync;
+    private presenceSync?: PresenceSync;
+    private embeddedServer?: EmbeddedServer;
     private friendRequestNotifier: FriendRequestNotifier;
     private presenceTracker?: PresenceTracker;
     private readonly authStateSubscription: vscode.Disposable;
@@ -35,11 +38,19 @@ export class ExtensionController implements vscode.Disposable {
         this.authManager = new AuthManager(context.secrets, context.globalState);
         this.presenceManager = new PresenceManager(context.globalState);
         this.friendRequestNotifier = new FriendRequestNotifier();
-        this.presenceSync = new PresenceSync(
-            this.authManager,
-            this.presenceManager,
-            this.friendRequestNotifier
+        const configuredUrl = vscode.workspace.getConfiguration("discode").get<string>(
+            "backendUrl",
+            "embedded"
         );
+        if (configuredUrl === "embedded") {
+            this.embeddedServer = new EmbeddedServer(context);
+        } else {
+            this.presenceSync = new PresenceSync(
+                this.authManager,
+                this.presenceManager,
+                this.friendRequestNotifier
+            );
+        }
         this.statusBar = new StatusBarManager();
         this.commandManager = new CommandManager(
             this.authManager,
@@ -61,6 +72,26 @@ export class ExtensionController implements vscode.Disposable {
     }
 
     public async initialize(): Promise<void> {
+        if (this.embeddedServer) {
+            try {
+                const port = await this.embeddedServer.start();
+                setBackendUrlOverride(`http://127.0.0.1:${port}`);
+            } catch (error) {
+                console.error("Failed to start embedded Discode backend:", error);
+                vscode.window.showErrorMessage(
+                    "Failed to start embedded Discode backend. Check that Node.js is installed."
+                );
+            }
+        }
+
+        if (!this.presenceSync) {
+            this.presenceSync = new PresenceSync(
+                this.authManager,
+                this.presenceManager,
+                this.friendRequestNotifier
+            );
+        }
+
         await Promise.all([
             this.authManager.initialize(),
             this.presenceManager.initialize()
@@ -88,12 +119,14 @@ export class ExtensionController implements vscode.Disposable {
     }
 
     public async disconnect(): Promise<void> {
-        await this.presenceSync.disconnect();
+        await this.presenceSync?.disconnect();
     }
 
     dispose() {
         this.presenceTracker?.dispose();
-        this.presenceSync.dispose();
+        this.presenceSync?.dispose();
+        this.embeddedServer?.dispose();
+        setBackendUrlOverride(undefined);
         this.activitySubscription?.dispose();
         this.authStateSubscription.dispose();
         this.presenceSubscription.dispose();

@@ -29,8 +29,8 @@
       "properties": {
         "discode.backendUrl": {
           "type": "string",
-          "default": "http://localhost:8000",
-          "description": "Discode backend base URL. HTTPS is required except for localhost."
+          "default": "embedded",
+          "description": "Discode backend base URL. Set to 'embedded' to use the zero-config built-in SQLite backend, or provide an HTTP/S URL for a standalone or remote Discode server."
         },
         "discode.heartbeatIntervalSeconds": {
           "type": "integer",
