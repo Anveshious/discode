@@ -201,6 +201,20 @@ export class DiscodeService {
         }
     }
 
+    public async cancelFriendRequest(githubId: string | number): Promise<void> {
+        const result = await this.api.request(
+            `api/friend-requests/outgoing/${encodeURIComponent(String(githubId))}`,
+            { method: "DELETE" }
+        );
+        if (
+            typeof result !== "object"
+            || result === null
+            || (result as Record<string, unknown>).status !== "cancelled"
+        ) {
+            throw new Error("The Discode backend returned an invalid friend request result.");
+        }
+    }
+
     public async updatePresence(status: PresenceStatusValue): Promise<void> {
         const result = await this.api.request("api/presence", {
             method: "PUT",

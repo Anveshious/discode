@@ -385,6 +385,67 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
     }
   });
 
+  router.delete("/friend-requests/outgoing/:githubId", authenticate, async (request, response) => {
+    const githubId = request.params.githubId;
+    if (!isGitHubId(githubId)) {
+      response.status(400).json({ error: "invalid_github_id" });
+      return;
+    }
+    const normalizedGithubId = BigInt(githubId).toString();
+    try {
+      const recipient = await pool.query(
+        "SELECT id FROM users WHERE github_id = $1",
+        [normalizedGithubId]
+      );
+      if (recipient.rows.length === 0) {
+        response.status(404).json({ error: "discode_user_not_found" });
+        return;
+      }
+      const recipientId = recipient.rows[0].id;
+      const result = await pool.query(
+        `DELETE FROM friendships
+         WHERE status = 'pending'
+           AND requested_by_id = $1
+           AND $2 IN (user_a_id, user_b_id)
+         RETURNING id`,
+        [request.discodeUserId, recipientId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_request_not_found" });
+        return;
+      }
+      response.json({ status: "cancelled" });
+    } catch (error) {
+      console.error("Failed to cancel outgoing friend request.", error);
+      response.status(500).json({ error: "cancel_friend_request_failed" });
+    }
+  });
+
+  router.delete("/friend-requests/:id", authenticate, async (request, response) => {
+    if (!isUuid(request.params.id)) {
+      response.status(400).json({ error: "invalid_friend_request_id" });
+      return;
+    }
+    try {
+      const result = await pool.query(
+        `DELETE FROM friendships
+         WHERE id = $1
+           AND status = 'pending'
+           AND requested_by_id = $2
+         RETURNING id`,
+        [request.params.id, request.discodeUserId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_request_not_found" });
+        return;
+      }
+      response.json({ status: "cancelled" });
+    } catch (error) {
+      console.error("Failed to cancel outgoing friend request.", error);
+      response.status(500).json({ error: "cancel_friend_request_failed" });
+    }
+  });
+
   router.put("/presence", authenticate, async (request, response) => {
     const { status } = request.body ?? {};
     if (!PRESENCE_STATUSES.has(status)) {

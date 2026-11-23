@@ -157,6 +157,9 @@ export class OpenDashboard {
                 case "friend.decline":
                     await this.declineFriendRequest(panel, message.requestId);
                     break;
+                case "friend.cancel":
+                    await this.cancelFriendRequest(panel, message.githubId);
+                    break;
                 case "connections.load":
                     if (!isConnectionKind(message.kind)) {
                         return;
@@ -355,6 +358,49 @@ export class OpenDashboard {
                     ? error.message
                     : "Unable to decline the friend request.",
             });
+        }
+    }
+
+    private async cancelFriendRequest(
+        panel: vscode.WebviewPanel,
+        githubId: unknown
+    ): Promise<void> {
+        const normalizedGithubId = typeof githubId === "number"
+            && Number.isSafeInteger(githubId)
+            ? String(githubId)
+            : githubId;
+        if (typeof normalizedGithubId !== "string" || !/^[1-9]\d{0,17}$/.test(normalizedGithubId)) {
+            await panel.webview.postMessage({
+                type: "friend.cancelResult",
+                githubId: String(githubId),
+                status: "error",
+                message: "Choose a valid user.",
+            });
+            return;
+        }
+
+        try {
+            await this.discodeService.cancelFriendRequest(normalizedGithubId);
+            await panel.webview.postMessage({
+                type: "friend.cancelResult",
+                githubId: normalizedGithubId,
+                status: "cancelled",
+            });
+            await this.refreshSocialData(panel);
+        } catch (error) {
+            await panel.webview.postMessage({
+                type: "friend.cancelResult",
+                githubId: normalizedGithubId,
+                status: "error",
+                message: error instanceof Error
+                    ? error.message
+                    : "Unable to cancel the friend request.",
+            });
+            await vscode.window.showErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to cancel the friend request."
+            );
         }
     }
 
@@ -1610,6 +1656,19 @@ export class OpenDashboard {
                     type: 'friend.invite',
                     username: item.username
                 }));
+            } else if (item.requestStatus === 'sent') {
+                button.textContent = 'Cancel request';
+                button.className = 'btn btn-secondary';
+                button.disabled = false;
+                button.onclick = () => {
+                    button.disabled = true;
+                    button.textContent = 'Cancelling…';
+                    vscode?.postMessage({
+                        type: 'friend.cancel',
+                        githubId: item.githubId
+                    });
+                };
+                rowButtons.set(item.githubId, button);
             } else if (item.requestStatus && item.requestStatus !== 'none') {
                 button.textContent = LABELS[item.requestStatus];
                 button.className = 'btn btn-secondary';
@@ -1990,11 +2049,22 @@ export class OpenDashboard {
                 const button = rowButtons.get(message.githubId);
                 if (button) {
                     if (message.status === 'sent') {
-                        button.textContent = 'Request sent';
+                        button.textContent = 'Cancel request';
                         button.className = 'btn btn-secondary';
+                        button.disabled = false;
+                        button.onclick = () => {
+                            button.disabled = true;
+                            button.textContent = 'Cancelling…';
+                            vscode?.postMessage({ type: 'friend.cancel', githubId: message.githubId });
+                        };
                     } else {
                         button.disabled = false;
                         button.textContent = 'Send friend request';
+                        button.onclick = () => {
+                            button.disabled = true;
+                            button.textContent = 'Sending…';
+                            vscode?.postMessage({ type: 'friend.request', githubId: message.githubId });
+                        };
                     }
                 }
                 document.querySelectorAll('button[data-github-id]').forEach(searchButton => {
@@ -2002,11 +2072,72 @@ export class OpenDashboard {
                         return;
                     }
                     if (message.status === 'sent') {
-                        searchButton.textContent = 'Request sent';
+                        searchButton.textContent = 'Cancel request';
                         searchButton.className = 'btn btn-secondary search-profile-link';
+                        searchButton.disabled = false;
+                        searchButton.onclick = () => {
+                            searchButton.disabled = true;
+                            searchButton.textContent = 'Cancelling…';
+                            if (vscode) {
+                                vscode.postMessage({ type: 'friend.cancel', githubId: message.githubId });
+                            } else {
+                                searchButton.disabled = false;
+                                searchButton.textContent = 'Cancel request';
+                            }
+                        };
                     } else {
                         searchButton.disabled = false;
                         searchButton.textContent = 'Send friend request';
+                        searchButton.onclick = () => {
+                            searchButton.disabled = true;
+                            searchButton.textContent = 'Sending…';
+                            if (vscode) {
+                                vscode.postMessage({ type: 'friend.request', githubId: message.githubId });
+                            } else {
+                                searchButton.disabled = false;
+                                searchButton.textContent = 'Send friend request';
+                            }
+                        };
+                    }
+                });
+            } else if (message.type === 'friend.cancelResult') {
+                const button = rowButtons.get(message.githubId);
+                if (button) {
+                    if (message.status === 'cancelled') {
+                        button.textContent = 'Send friend request';
+                        button.className = 'btn btn-primary';
+                        button.disabled = false;
+                        button.onclick = () => {
+                            button.disabled = true;
+                            button.textContent = 'Sending…';
+                            vscode?.postMessage({ type: 'friend.request', githubId: message.githubId });
+                        };
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Cancel request';
+                    }
+                }
+                document.querySelectorAll('button[data-github-id]').forEach(searchButton => {
+                    if (searchButton.dataset.githubId !== String(message.githubId)) {
+                        return;
+                    }
+                    if (message.status === 'cancelled') {
+                        searchButton.textContent = 'Send friend request';
+                        searchButton.className = 'btn btn-secondary search-profile-link';
+                        searchButton.disabled = false;
+                        searchButton.onclick = () => {
+                            searchButton.disabled = true;
+                            searchButton.textContent = 'Sending…';
+                            if (vscode) {
+                                vscode.postMessage({ type: 'friend.request', githubId: message.githubId });
+                            } else {
+                                searchButton.disabled = false;
+                                searchButton.textContent = 'Send friend request';
+                            }
+                        };
+                    } else {
+                        searchButton.disabled = false;
+                        searchButton.textContent = 'Cancel request';
                     }
                 });
             }
