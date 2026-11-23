@@ -74,6 +74,11 @@ To prevent stale online status across all clients:
 - The Discode backend continuously enforces a 90-second freshness window on presence queries (`updated_at >= now() - interval '90 seconds'`), degrading any unrenewed heartbeat directly to `offline`.
 - In the dashboard, friends' presence is automatically polled and refreshed every 30 seconds, ensuring active clients quickly discover when a contact has timed out or disconnected.
 
+Presence synchronization is verified across multiple computers and devices:
+- **Cross-user synchronization:** Real-time presence state transitions (`online`, `focused`, `open-to-contribute`, `idle`, `offline`) triggered on one computer synchronize to the backend and are reliably reflected when friends query presence from other computers.
+- **Multi-device usage:** When the same developer works across multiple computers (e.g., Desktop and Laptop), presence updates seamlessly synchronize without conflicts.
+- **Network fault tolerance:** If a remote machine disconnects abruptly, friends' clients detect the expiration after the 90-second freshness window and update the status to `offline`.
+
 ### 5. Coding Activity
 
 With user permission, Discode may display lightweight activity such as:

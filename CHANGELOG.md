@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `README.md`, `backend/test/multiClientPresence.test.js`
 - Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/services/DiscodeService.ts`, `src/test/discodeService.test.ts`
 - Staged paths: `README.md`, `backend/test/social.test.js`, `src/core/ExtensionController.ts`, `src/extension.ts`, `src/services/PresenceSync.ts`, and 1 more
 - Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/webview/DashboardView.ts`
