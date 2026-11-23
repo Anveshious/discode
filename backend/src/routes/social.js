@@ -468,6 +468,42 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
     }
   });
 
+  router.delete("/friends/:githubId", authenticate, async (request, response) => {
+    const githubId = request.params.githubId;
+    if (!isGitHubId(githubId)) {
+      response.status(400).json({ error: "invalid_github_id" });
+      return;
+    }
+    const normalizedGithubId = BigInt(githubId).toString();
+    try {
+      const friend = await pool.query(
+        "SELECT id FROM users WHERE github_id = $1",
+        [normalizedGithubId]
+      );
+      if (friend.rows.length === 0) {
+        response.status(404).json({ error: "discode_user_not_found" });
+        return;
+      }
+      const friendId = friend.rows[0].id;
+      const result = await pool.query(
+        `DELETE FROM friendships
+         WHERE status = 'accepted'
+           AND user_a_id = LEAST($1::uuid, $2::uuid)
+           AND user_b_id = GREATEST($1::uuid, $2::uuid)
+         RETURNING id`,
+        [request.discodeUserId, friendId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_not_found" });
+        return;
+      }
+      response.json({ status: "removed" });
+    } catch (error) {
+      console.error("Failed to remove friend.", error);
+      response.status(500).json({ error: "remove_friend_failed" });
+    }
+  });
+
   router.put("/presence", authenticate, async (request, response) => {
     const { status } = request.body ?? {};
     if (!PRESENCE_STATUSES.has(status)) {

@@ -165,6 +165,9 @@ export class OpenDashboard {
                 case "friend.cancel":
                     await this.cancelFriendRequest(panel, message.githubId);
                     break;
+                case "friend.remove":
+                    await this.removeFriend(panel, message.githubId);
+                    break;
                 case "connections.load":
                     if (!isConnectionKind(message.kind)) {
                         return;
@@ -450,6 +453,46 @@ export class OpenDashboard {
                     ? error.message
                     : "Unable to cancel the friend request."
             );
+        }
+    }
+
+    private async removeFriend(
+        panel: vscode.WebviewPanel,
+        githubId: unknown
+    ): Promise<void> {
+        const normalizedGithubId = typeof githubId === "number"
+            && Number.isSafeInteger(githubId)
+            ? String(githubId)
+            : githubId;
+        if (typeof normalizedGithubId !== "string" || !/^[1-9]\d{0,17}$/.test(normalizedGithubId)) {
+            await panel.webview.postMessage({
+                type: "friend.removeResult",
+                githubId: String(githubId),
+                status: "error",
+                message: "Choose a valid friend.",
+            });
+            return;
+        }
+
+        try {
+            await this.discodeService.removeFriend(normalizedGithubId);
+            await panel.webview.postMessage({
+                type: "friend.removeResult",
+                githubId: normalizedGithubId,
+                status: "removed",
+            });
+            await this.refreshSocialData(panel);
+        } catch (error) {
+            const message = error instanceof Error
+                ? error.message
+                : "Unable to remove friend.";
+            await panel.webview.postMessage({
+                type: "friend.removeResult",
+                githubId: normalizedGithubId,
+                status: "error",
+                message,
+            });
+            await vscode.window.showErrorMessage(message);
         }
     }
 
@@ -1533,6 +1576,7 @@ export class OpenDashboard {
         const friendRequestButtons = new Map();
         const friendAcceptButtons = new Map();
         const friendDeclineButtons = new Map();
+        const friendRemoveButtons = new Map();
 
         function login() {
             if (vscode) {
@@ -1878,6 +1922,24 @@ export class OpenDashboard {
             presence.append(dot, document.createTextNode(labelFor(friend.status)));
             details.append(name, presence);
             row.appendChild(details);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn btn-secondary';
+            removeBtn.type = 'button';
+            removeBtn.textContent = 'Remove';
+            removeBtn.title = 'Remove friend';
+            removeBtn.onclick = () => {
+                removeBtn.disabled = true;
+                removeBtn.textContent = 'Removing…';
+                if (vscode) {
+                    vscode.postMessage({
+                        type: 'friend.remove',
+                        githubId: friend.githubId
+                    });
+                }
+            };
+            row.appendChild(removeBtn);
+            friendRemoveButtons.set(friend.githubId, removeBtn);
             return row;
         }
 
@@ -1971,6 +2033,7 @@ export class OpenDashboard {
                 : '';
             friendAcceptButtons.clear();
             friendDeclineButtons.clear();
+            friendRemoveButtons.clear();
         }
 
         function resetSocialState() {
@@ -2115,6 +2178,17 @@ export class OpenDashboard {
                         button.textContent = 'Decline';
                         if (acceptBtn) { acceptBtn.disabled = false; }
                         document.getElementById('friendRequestStatus').textContent = message.message;
+                    }
+                }
+            } else if (message.type === 'friend.removeResult') {
+                const button = friendRemoveButtons.get(message.githubId);
+                if (button) {
+                    if (message.status === 'removed') {
+                        button.textContent = 'Removed';
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Remove';
+                        document.getElementById('friendListStatus').textContent = message.message;
                     }
                 }
             } else if (message.type === 'friend.requestResult') {

@@ -43,7 +43,7 @@ Discode will use GitHub's supported APIs for public user search and profile look
 
 ### 3. Friends and Connections
 
-- Send friend requests to registered Discode users, accept or decline incoming requests, and cancel outgoing requests.
+- Send friend requests to registered Discode users, accept or decline incoming requests, cancel outgoing requests, and remove existing friends.
 - Prevent duplicate and self-directed friend requests as well as requests between existing friends in both the API and dashboard UI.
 - Display incoming friend requests with sender details, avatars, and pending count in the dashboard.
 - Maintain an accepted-friends list inside the Discode dashboard.
@@ -131,6 +131,7 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Friend request notifications with quick action to open the dashboard.
 - [x] Publish presence with a 30-second heartbeat and expire stale presence after 90 seconds.
 - [x] Show accepted friends and incoming requests in the dashboard with requester avatars and profile links.
+- [x] Remove existing friends with instant UI updates and backend synchronization.
 
 ### In Progress / Needs Integration
 

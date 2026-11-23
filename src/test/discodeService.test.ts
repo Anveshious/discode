@@ -119,4 +119,14 @@ suite("DiscodeService Test Suite", () => {
 
         await service.updatePresence("online");
     });
+
+    test("removes a friend using an authenticated DELETE request", async () => {
+        const service = createService(async (input, init) => {
+            assert.ok(String(input).endsWith("/api/friends/123456"));
+            assert.equal(init?.method, "DELETE");
+            return new Response(JSON.stringify({ status: "removed" }));
+        });
+
+        await service.removeFriend("123456");
+    });
 });
