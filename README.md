@@ -68,6 +68,8 @@ Users should be able to select a status manually (via the Discode dashboard or `
 configurable presence heartbeat (defaulting to every 30 seconds via `discode.heartbeatIntervalSeconds`); friends are shown as offline when their
 last update is more than 90 seconds old.
 
+Disconnected clients are handled gracefully on extension deactivation (e.g. closing or reloading VS Code) by stopping the heartbeat and immediately publishing an `offline` presence status to the Discode backend. In the event of an unexpected disconnect (power loss or network failure), the backend marks friends offline once the 90-second heartbeat freshness window elapses.
+
 ### 5. Coding Activity
 
 With user permission, Discode may display lightweight activity such as:

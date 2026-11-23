@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
-import { ExtensionController} from './core/ExtensionController';
+import { ExtensionController } from './core/ExtensionController';
+
+let controller: ExtensionController | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
-	const controller = new ExtensionController(context);
+	controller = new ExtensionController(context);
 	context.subscriptions.push(controller);
 	await controller.initialize();
-	
-	// const disposable = vscode.commands.registerCommand('discode.helloWorld', () => {
-	// 	vscode.window.showInformationMessage("it's the time to discode!");
-	// });
-
-	// context.subscriptions.push(disposable);
 }
-export function deactivate() {}
+
+export async function deactivate(): Promise<void> {
+	await controller?.disconnect();
+	controller = undefined;
+}

@@ -454,6 +454,25 @@ test("updates the authenticated user's presence and rejects invalid statuses", a
   assert.deepEqual(await invalidResponse.json(), { error: "invalid_presence_status" });
 });
 
+test("handles disconnecting clients by setting presence to offline", async () => {
+  let updatedValues;
+  const pool = createPool(async (sql, values) => {
+    assert.match(sql, /INSERT INTO user_presence/);
+    updatedValues = values;
+    return { rows: [] };
+  });
+  const response = await requestSocial({
+    pool,
+    path: "/presence",
+    method: "PUT",
+    body: { status: "offline" },
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "offline" });
+  assert.deepEqual(updatedValues, ["self-user-id", "offline"]);
+});
+
 test("marks follower Discode membership and request status", async () => {
   const followers = [
     {

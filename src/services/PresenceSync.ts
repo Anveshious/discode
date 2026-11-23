@@ -130,6 +130,21 @@ export class PresenceSync implements vscode.Disposable {
         }
     }
 
+    public async disconnect(): Promise<void> {
+        this.stopHeartbeat();
+        const session = this.authManager.getSession();
+        const isReady = this.readySessionKey !== undefined;
+        this.sessionKey = undefined;
+        this.readySessionKey = undefined;
+        if (session && isReady) {
+            try {
+                await this.discodeService.updatePresence("offline");
+            } catch {
+                // Best-effort offline publish during disconnect
+            }
+        }
+    }
+
     public dispose(): void {
         this.stopHeartbeat();
         this.subscriptions.forEach((subscription) => subscription.dispose());

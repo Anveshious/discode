@@ -192,4 +192,59 @@ suite("PresenceSync Test Suite", () => {
             authEmitter.dispose();
         }
     });
+
+    test("disconnects and publishes offline presence status", async () => {
+        const session = createMockSession();
+        const authEmitter = new vscode.EventEmitter<boolean>();
+
+        const mockAuthManager = {
+            getSession: () => session,
+            onDidChangeAuthentication: authEmitter.event,
+        } as unknown as AuthManager;
+
+        const globalStateValues = new Map<string, unknown>();
+        const mockGlobalState: Pick<vscode.Memento, "get" | "update"> = {
+            get: <T>(key: string, defaultValue?: T) => (globalStateValues.has(key) ? (globalStateValues.get(key) as T) : defaultValue),
+            update: async (key: string, value: unknown) => {
+                if (value === undefined) { globalStateValues.delete(key); } else { globalStateValues.set(key, value); }
+            },
+        };
+        const presenceManager = new PresenceManager(mockGlobalState);
+        await presenceManager.initialize();
+
+        const publishedStatuses: PresenceStatusValue[] = [];
+        const mockDiscodeService = {
+            signIn: async () => ({ user: { id: "u-1", githubId: "12345", username: "testuser", name: "Test", avatarUrl: "", profileUrl: "" }, created: false }),
+            updatePresence: async (status: PresenceStatusValue) => {
+                publishedStatuses.push(status);
+            },
+            getFriendRequests: async () => [],
+        } as unknown as DiscodeService;
+
+        const sync = new PresenceSync(
+            mockAuthManager,
+            presenceManager,
+            new FriendRequestNotifier(),
+            mockDiscodeService,
+            20
+        );
+
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 35));
+            assert.ok(publishedStatuses.length >= 1);
+
+            await sync.disconnect();
+
+            assert.strictEqual(publishedStatuses[publishedStatuses.length - 1], "offline");
+
+            // Verify heartbeat is stopped after disconnect
+            const countAfterDisconnect = publishedStatuses.length;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            assert.strictEqual(publishedStatuses.length, countAfterDisconnect);
+        } finally {
+            sync.dispose();
+            presenceManager.dispose();
+            authEmitter.dispose();
+        }
+    });
 });

@@ -87,6 +87,10 @@ export class ExtensionController implements vscode.Disposable {
         );
     }
 
+    public async disconnect(): Promise<void> {
+        await this.presenceSync.disconnect();
+    }
+
     dispose() {
         this.presenceTracker?.dispose();
         this.presenceSync.dispose();
