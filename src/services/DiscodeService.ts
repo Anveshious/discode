@@ -187,6 +187,48 @@ export class DiscodeService {
         }
     }
 
+    public async declineFriendRequest(requestId: string): Promise<void> {
+        const result = await this.api.post(
+            `api/friend-requests/${encodeURIComponent(requestId)}/decline`,
+            {}
+        );
+        if (
+            typeof result !== "object"
+            || result === null
+            || (result as Record<string, unknown>).status !== "declined"
+        ) {
+            throw new Error("The Discode backend returned an invalid friend request result.");
+        }
+    }
+
+    public async cancelFriendRequest(githubId: string | number): Promise<void> {
+        const result = await this.api.request(
+            `api/friend-requests/outgoing/${encodeURIComponent(String(githubId))}`,
+            { method: "DELETE" }
+        );
+        if (
+            typeof result !== "object"
+            || result === null
+            || (result as Record<string, unknown>).status !== "cancelled"
+        ) {
+            throw new Error("The Discode backend returned an invalid friend request result.");
+        }
+    }
+
+    public async removeFriend(githubId: string | number): Promise<void> {
+        const result = await this.api.request(
+            `api/friends/${encodeURIComponent(String(githubId))}`,
+            { method: "DELETE" }
+        );
+        if (
+            typeof result !== "object"
+            || result === null
+            || (result as Record<string, unknown>).status !== "removed"
+        ) {
+            throw new Error("The Discode backend returned an invalid friend removal result.");
+        }
+    }
+
     public async updatePresence(status: PresenceStatusValue): Promise<void> {
         const result = await this.api.request("api/presence", {
             method: "PUT",

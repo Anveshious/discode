@@ -4,6 +4,7 @@ import { CommandManager } from "../commands/CommandManager";
 import { AuthManager } from "../auth/AuthManager";
 import { PresenceManager } from "../services/PresenceManager";
 import { PresenceSync } from "../services/PresenceSync";
+import { FriendRequestNotifier } from "../services/FriendRequestNotifier";
 import { PresenceTracker } from "../presence/presenceTracker";
 
 export class ExtensionController implements vscode.Disposable {
@@ -12,6 +13,7 @@ export class ExtensionController implements vscode.Disposable {
     private authManager: AuthManager;
     private presenceManager: PresenceManager;
     private presenceSync: PresenceSync;
+    private friendRequestNotifier: FriendRequestNotifier;
     private presenceTracker?: PresenceTracker;
     private readonly authStateSubscription: vscode.Disposable;
     private readonly presenceSubscription: vscode.Disposable;
@@ -20,9 +22,18 @@ export class ExtensionController implements vscode.Disposable {
     constructor(context: vscode.ExtensionContext) {
         this.authManager = new AuthManager(context.secrets, context.globalState);
         this.presenceManager = new PresenceManager(context.globalState);
-        this.presenceSync = new PresenceSync(this.authManager, this.presenceManager);
+        this.friendRequestNotifier = new FriendRequestNotifier();
+        this.presenceSync = new PresenceSync(
+            this.authManager,
+            this.presenceManager,
+            this.friendRequestNotifier
+        );
         this.statusBar = new StatusBarManager();
-        this.commandManager = new CommandManager(this.authManager, this.presenceManager);
+        this.commandManager = new CommandManager(
+            this.authManager,
+            this.presenceManager,
+            this.friendRequestNotifier
+        );
         this.updateStatusBar();
         this.authStateSubscription = this.authManager.onDidChangeAuthentication(
             () => this.updateStatusBar()

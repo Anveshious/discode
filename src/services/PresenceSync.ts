@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { AuthManager } from "../auth/AuthManager";
 import type { PresenceManager } from "./PresenceManager";
 import { DiscodeService } from "./DiscodeService";
+import { FriendRequestNotifier } from "./FriendRequestNotifier";
 
 const PRESENCE_HEARTBEAT_MS = 30_000;
 
@@ -15,7 +16,8 @@ export class PresenceSync implements vscode.Disposable {
 
     constructor(
         private readonly authManager: AuthManager,
-        private readonly presenceManager: PresenceManager
+        private readonly presenceManager: PresenceManager,
+        private readonly friendRequestNotifier: FriendRequestNotifier = new FriendRequestNotifier()
     ) {
         this.discodeService = new DiscodeService(authManager);
         this.subscriptions = [
@@ -31,6 +33,7 @@ export class PresenceSync implements vscode.Disposable {
             this.stopHeartbeat();
             this.sessionKey = undefined;
             this.readySessionKey = undefined;
+            this.friendRequestNotifier.reset();
             return;
         }
 
@@ -89,6 +92,15 @@ export class PresenceSync implements vscode.Disposable {
             if (expectedSessionKey === this.sessionKey) {
                 this.reportSyncError(error);
             }
+        }
+
+        try {
+            const requests = await this.discodeService.getFriendRequests();
+            if (expectedSessionKey === this.sessionKey) {
+                this.friendRequestNotifier.processRequests(requests);
+            }
+        } catch {
+            // Ignore social fetch errors during background presence heartbeat
         }
     }
 

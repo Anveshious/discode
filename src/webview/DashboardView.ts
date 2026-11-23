@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../auth/AuthManager";
+import { ApiError } from "../services/ApiService";
 import { DiscodeService } from "../services/DiscodeService";
+import { FriendRequestNotifier } from "../services/FriendRequestNotifier";
 import { GitHubService } from "../services/GitHubService";
 import { ManualPresenceStatus } from "../models/PresenceStatus";
 import { PresenceManager } from "../services/PresenceManager";
@@ -34,12 +36,15 @@ export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
     private latestSearchRequestId = 0;
     private socialRefreshInterval?: NodeJS.Timeout;
+    private currentGithubId?: string;
+    private currentFriendGithubIds = new Set<string>();
     private readonly discodeService: DiscodeService;
     private readonly githubService: GitHubService;
 
     constructor(
         private readonly authManager: AuthManager,
-        private readonly presenceManager: PresenceManager
+        private readonly presenceManager: PresenceManager,
+        private readonly friendRequestNotifier: FriendRequestNotifier = new FriendRequestNotifier()
     ) {
         this.discodeService = new DiscodeService(authManager);
         this.githubService = new GitHubService(authManager);
@@ -154,6 +159,15 @@ export class OpenDashboard {
                 case "friend.accept":
                     await this.acceptFriendRequest(panel, message.requestId);
                     break;
+                case "friend.decline":
+                    await this.declineFriendRequest(panel, message.requestId);
+                    break;
+                case "friend.cancel":
+                    await this.cancelFriendRequest(panel, message.githubId);
+                    break;
+                case "friend.remove":
+                    await this.removeFriend(panel, message.githubId);
+                    break;
                 case "connections.load":
                     if (!isConnectionKind(message.kind)) {
                         return;
@@ -230,6 +244,8 @@ export class OpenDashboard {
             ) {
                 return;
             }
+            this.currentFriendGithubIds = new Set(friends.map((friend) => String(friend.githubId)));
+            this.friendRequestNotifier.processRequests(requests);
             await panel.webview.postMessage({
                 type: "social.state",
                 friends,
@@ -267,6 +283,35 @@ export class OpenDashboard {
             return;
         }
 
+        const normalizedGithubId = typeof githubId === "number"
+            && Number.isSafeInteger(githubId)
+            ? String(githubId)
+            : String(githubId);
+
+        if (this.currentGithubId && this.currentGithubId === normalizedGithubId) {
+            const message = "You cannot send a friend request to yourself.";
+            await panel.webview.postMessage({
+                type: "friend.requestResult",
+                githubId: String(githubId),
+                status: "error",
+                message,
+            });
+            await vscode.window.showErrorMessage(message);
+            return;
+        }
+
+        if (this.currentFriendGithubIds.has(normalizedGithubId)) {
+            const message = "You are already friends with this user.";
+            await panel.webview.postMessage({
+                type: "friend.requestResult",
+                githubId: String(githubId),
+                status: "error",
+                message,
+            });
+            await vscode.window.showErrorMessage(message);
+            return;
+        }
+
         try {
             await this.discodeService.sendFriendRequest(githubId);
             await panel.webview.postMessage({
@@ -276,14 +321,27 @@ export class OpenDashboard {
             });
             await this.refreshSocialData(panel);
         } catch (error) {
+            let message = "Unable to send the friend request.";
+            if (error instanceof ApiError) {
+                if (error.code === "friend_request_exists") {
+                    message = "A friend request is already pending with this user.";
+                } else if (error.code === "self_friend_request") {
+                    message = "You cannot send a friend request to yourself.";
+                } else if (error.code === "already_friends") {
+                    message = "You are already friends with this user.";
+                } else {
+                    message = error.message;
+                }
+            } else if (error instanceof Error) {
+                message = error.message;
+            }
             await panel.webview.postMessage({
                 type: "friend.requestResult",
                 githubId: String(githubId),
                 status: "error",
-                message: error instanceof Error
-                    ? error.message
-                    : "Unable to send the friend request.",
+                message,
             });
+            await vscode.window.showErrorMessage(message);
         }
     }
 
@@ -321,6 +379,123 @@ export class OpenDashboard {
         }
     }
 
+    private async declineFriendRequest(
+        panel: vscode.WebviewPanel,
+        requestId: unknown
+    ): Promise<void> {
+        if (typeof requestId !== "string") {
+            await panel.webview.postMessage({
+                type: "friend.declineResult",
+                requestId: "",
+                status: "error",
+                message: "Choose a valid friend request.",
+            });
+            return;
+        }
+
+        try {
+            await this.discodeService.declineFriendRequest(requestId);
+            await panel.webview.postMessage({
+                type: "friend.declineResult",
+                requestId,
+                status: "declined",
+            });
+            await this.refreshSocialData(panel);
+        } catch (error) {
+            await panel.webview.postMessage({
+                type: "friend.declineResult",
+                requestId,
+                status: "error",
+                message: error instanceof Error
+                    ? error.message
+                    : "Unable to decline the friend request.",
+            });
+        }
+    }
+
+    private async cancelFriendRequest(
+        panel: vscode.WebviewPanel,
+        githubId: unknown
+    ): Promise<void> {
+        const normalizedGithubId = typeof githubId === "number"
+            && Number.isSafeInteger(githubId)
+            ? String(githubId)
+            : githubId;
+        if (typeof normalizedGithubId !== "string" || !/^[1-9]\d{0,17}$/.test(normalizedGithubId)) {
+            await panel.webview.postMessage({
+                type: "friend.cancelResult",
+                githubId: String(githubId),
+                status: "error",
+                message: "Choose a valid user.",
+            });
+            return;
+        }
+
+        try {
+            await this.discodeService.cancelFriendRequest(normalizedGithubId);
+            await panel.webview.postMessage({
+                type: "friend.cancelResult",
+                githubId: normalizedGithubId,
+                status: "cancelled",
+            });
+            await this.refreshSocialData(panel);
+        } catch (error) {
+            await panel.webview.postMessage({
+                type: "friend.cancelResult",
+                githubId: normalizedGithubId,
+                status: "error",
+                message: error instanceof Error
+                    ? error.message
+                    : "Unable to cancel the friend request.",
+            });
+            await vscode.window.showErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to cancel the friend request."
+            );
+        }
+    }
+
+    private async removeFriend(
+        panel: vscode.WebviewPanel,
+        githubId: unknown
+    ): Promise<void> {
+        const normalizedGithubId = typeof githubId === "number"
+            && Number.isSafeInteger(githubId)
+            ? String(githubId)
+            : githubId;
+        if (typeof normalizedGithubId !== "string" || !/^[1-9]\d{0,17}$/.test(normalizedGithubId)) {
+            await panel.webview.postMessage({
+                type: "friend.removeResult",
+                githubId: String(githubId),
+                status: "error",
+                message: "Choose a valid friend.",
+            });
+            return;
+        }
+
+        try {
+            await this.discodeService.removeFriend(normalizedGithubId);
+            await panel.webview.postMessage({
+                type: "friend.removeResult",
+                githubId: normalizedGithubId,
+                status: "removed",
+            });
+            await this.refreshSocialData(panel);
+        } catch (error) {
+            const message = error instanceof Error
+                ? error.message
+                : "Unable to remove friend.";
+            await panel.webview.postMessage({
+                type: "friend.removeResult",
+                githubId: normalizedGithubId,
+                status: "error",
+                message,
+            });
+            await vscode.window.showErrorMessage(message);
+        }
+    }
+
     private async postPresenceState(panel: vscode.WebviewPanel): Promise<void> {
         await panel.webview.postMessage({
             type: "presence.state",
@@ -338,6 +513,9 @@ export class OpenDashboard {
         });
 
         if (!session) {
+            this.currentGithubId = undefined;
+            this.currentFriendGithubIds.clear();
+            this.friendRequestNotifier.reset();
             return;
         }
 
@@ -351,6 +529,7 @@ export class OpenDashboard {
                 return;
             }
 
+            this.currentGithubId = String(result.user.githubId);
             await panel.webview.postMessage({
                 type: "auth.profile",
                 user: result.user,
@@ -1041,6 +1220,74 @@ export class OpenDashboard {
             text-decoration: underline;
         }
 
+        .friend-list,
+        .friend-request-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+
+        .friend-row,
+        .friend-request-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-2);
+            padding: var(--space-2) 0;
+            border-bottom: 1px solid var(--dc-border);
+        }
+
+        .friend-row:last-child,
+        .friend-request-row:last-child {
+            border-bottom: none;
+        }
+
+        .friend-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .friend-details {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .friend-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .friend-name:hover {
+            color: var(--dc-focus);
+            text-decoration: underline;
+        }
+
+        .friend-presence {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-1);
+            font-size: 0.85em;
+            color: var(--dc-muted);
+        }
+
+        .friend-request-actions {
+            display: inline-flex;
+            gap: var(--space-1);
+        }
+
+        .friend-request-row .btn {
+            width: auto;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.8rem;
+        }
+
         .conn-row .btn {
             width: auto;
             padding: 0.35rem 0.7rem;
@@ -1328,6 +1575,8 @@ export class OpenDashboard {
         const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
         const friendRequestButtons = new Map();
         const friendAcceptButtons = new Map();
+        const friendDeclineButtons = new Map();
+        const friendRemoveButtons = new Map();
 
         function login() {
             if (vscode) {
@@ -1413,6 +1662,7 @@ export class OpenDashboard {
         const rowButtons = new Map();
         const AVATAR_PREFIX = 'https://avatars.githubusercontent.com/';
         const LABELS = { sent: 'Request sent', received: 'Request received', friends: 'Friends' };
+        const currentFriendGithubIds = new Set();
 
         function showView(name) {
             VIEWS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== name));
@@ -1495,6 +1745,14 @@ export class OpenDashboard {
             name.textContent = item.username;
             row.appendChild(name);
 
+            if (currentGithubId && String(item.githubId) === currentGithubId) {
+                const selfLabel = document.createElement('span');
+                selfLabel.className = 'search-profile-link';
+                selfLabel.textContent = 'You';
+                row.appendChild(selfLabel);
+                return row;
+            }
+
             const button = document.createElement('button');
             button.className = 'btn btn-primary';
             button.type = 'button';
@@ -1504,6 +1762,19 @@ export class OpenDashboard {
                     type: 'friend.invite',
                     username: item.username
                 }));
+            } else if (item.requestStatus === 'sent') {
+                button.textContent = 'Cancel request';
+                button.className = 'btn btn-secondary';
+                button.disabled = false;
+                button.onclick = () => {
+                    button.disabled = true;
+                    button.textContent = 'Cancelling…';
+                    vscode?.postMessage({
+                        type: 'friend.cancel',
+                        githubId: item.githubId
+                    });
+                };
+                rowButtons.set(item.githubId, button);
             } else if (item.requestStatus && item.requestStatus !== 'none') {
                 button.textContent = LABELS[item.requestStatus];
                 button.className = 'btn btn-secondary';
@@ -1554,7 +1825,19 @@ export class OpenDashboard {
                     : 'Not on Discode';
                 details.append(username, membership);
 
-                if (user.isRegistered && String(user.id) !== currentGithubId) {
+                if (currentGithubId && String(user.id) === currentGithubId) {
+                    const selfLabel = document.createElement('span');
+                    selfLabel.className = 'search-profile-link';
+                    selfLabel.textContent = 'You';
+                    profile.append(avatar, details, selfLabel);
+                } else if (currentFriendGithubIds.has(String(user.id))) {
+                    const button = document.createElement('button');
+                    button.className = 'btn btn-secondary search-profile-link';
+                    button.type = 'button';
+                    button.disabled = true;
+                    button.textContent = 'Friends';
+                    profile.append(avatar, details, button);
+                } else if (user.isRegistered) {
                     const button = document.createElement('button');
                     button.className = 'btn btn-secondary search-profile-link';
                     button.type = 'button';
@@ -1574,11 +1857,6 @@ export class OpenDashboard {
                         }
                     });
                     profile.append(avatar, details, button);
-                } else if (user.isRegistered) {
-                    const selfLabel = document.createElement('span');
-                    selfLabel.className = 'search-profile-link';
-                    selfLabel.textContent = 'You';
-                    profile.append(avatar, details, selfLabel);
                 } else {
                     const button = document.createElement('button');
                     button.className = 'btn btn-secondary search-profile-link';
@@ -1629,8 +1907,11 @@ export class OpenDashboard {
 
             const details = document.createElement('div');
             details.className = 'friend-details';
-            const name = document.createElement('span');
+            const name = document.createElement('a');
             name.className = 'friend-name';
+            name.href = friend.profileUrl || ('https://github.com/' + encodeURIComponent(friend.username));
+            name.target = '_blank';
+            name.rel = 'noopener noreferrer';
             name.textContent = '@' + friend.username;
             const presence = document.createElement('span');
             presence.className = 'friend-presence';
@@ -1641,26 +1922,89 @@ export class OpenDashboard {
             presence.append(dot, document.createTextNode(labelFor(friend.status)));
             details.append(name, presence);
             row.appendChild(details);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn btn-secondary';
+            removeBtn.type = 'button';
+            removeBtn.textContent = 'Remove';
+            removeBtn.title = 'Remove friend';
+            removeBtn.onclick = () => {
+                removeBtn.disabled = true;
+                removeBtn.textContent = 'Removing…';
+                if (vscode) {
+                    vscode.postMessage({
+                        type: 'friend.remove',
+                        githubId: friend.githubId
+                    });
+                }
+            };
+            row.appendChild(removeBtn);
+            friendRemoveButtons.set(friend.githubId, removeBtn);
             return row;
         }
 
         function createFriendRequestRow(request) {
             const row = document.createElement('div');
             row.className = 'friend-request-row';
-            const name = document.createElement('span');
+
+            try {
+                const avatarUrl = new URL(request.avatarUrl);
+                if (
+                    avatarUrl.protocol === 'https:'
+                    && avatarUrl.hostname === 'avatars.githubusercontent.com'
+                ) {
+                    const avatar = document.createElement('img');
+                    avatar.className = 'friend-avatar';
+                    avatar.src = avatarUrl.toString();
+                    avatar.alt = '';
+                    row.appendChild(avatar);
+                }
+            } catch {
+                // Skip malformed avatar URLs and keep the row visible.
+            }
+
+            const details = document.createElement('div');
+            details.className = 'friend-details';
+            const name = document.createElement('a');
             name.className = 'friend-name';
+            name.href = request.profileUrl || ('https://github.com/' + encodeURIComponent(request.username));
+            name.target = '_blank';
+            name.rel = 'noopener noreferrer';
             name.textContent = '@' + request.username;
-            const button = document.createElement('button');
-            button.className = 'btn btn-primary';
-            button.type = 'button';
-            button.textContent = 'Accept';
-            button.onclick = () => {
-                button.disabled = true;
-                button.textContent = 'Accepting…';
+            details.appendChild(name);
+            row.appendChild(details);
+
+            const actions = document.createElement('div');
+            actions.className = 'friend-request-actions';
+
+            const acceptButton = document.createElement('button');
+            acceptButton.className = 'btn btn-primary';
+            acceptButton.type = 'button';
+            acceptButton.textContent = 'Accept';
+
+            const declineButton = document.createElement('button');
+            declineButton.className = 'btn btn-secondary';
+            declineButton.type = 'button';
+            declineButton.textContent = 'Decline';
+
+            acceptButton.onclick = () => {
+                acceptButton.disabled = true;
+                declineButton.disabled = true;
+                acceptButton.textContent = 'Accepting…';
                 vscode?.postMessage({ type: 'friend.accept', requestId: request.id });
             };
-            friendAcceptButtons.set(request.id, button);
-            row.append(name, button);
+
+            declineButton.onclick = () => {
+                acceptButton.disabled = true;
+                declineButton.disabled = true;
+                declineButton.textContent = 'Declining…';
+                vscode?.postMessage({ type: 'friend.decline', requestId: request.id });
+            };
+
+            friendAcceptButtons.set(request.id, acceptButton);
+            friendDeclineButtons.set(request.id, declineButton);
+            actions.append(acceptButton, declineButton);
+            row.appendChild(actions);
             return row;
         }
 
@@ -1669,6 +2013,8 @@ export class OpenDashboard {
             const requestList = document.getElementById('friendRequestList');
             friendList.replaceChildren(...friends.map(createFriendRow));
             requestList.replaceChildren(...requests.map(createFriendRequestRow));
+            currentFriendGithubIds.clear();
+            friends.forEach(friend => currentFriendGithubIds.add(String(friend.githubId)));
 
             const onlineCount = friends.filter(friend => friend.status !== 'offline').length;
             document.getElementById('friendsOnlineCount').textContent = String(onlineCount);
@@ -1686,9 +2032,12 @@ export class OpenDashboard {
                 ? 'Review incoming requests.'
                 : '';
             friendAcceptButtons.clear();
+            friendDeclineButtons.clear();
+            friendRemoveButtons.clear();
         }
 
         function resetSocialState() {
+            currentFriendGithubIds.clear();
             renderSocialState([], []);
             document.getElementById('friendListStatus').textContent = 'Sign in to see your friends.';
             document.getElementById('friendListEmpty').classList.add('hidden');
@@ -1801,27 +2150,73 @@ export class OpenDashboard {
                 }
             } else if (message.type === 'friend.acceptResult') {
                 const button = friendAcceptButtons.get(message.requestId);
-                if (!button) {
-                    return;
+                const declineBtn = friendDeclineButtons.get(message.requestId);
+                if (button) {
+                    if (message.status === 'accepted') {
+                        button.textContent = 'Accepted';
+                        if (declineBtn) { declineBtn.remove(); }
+                        document.getElementById('friendRequestStatus').textContent =
+                            'Friend request accepted.';
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Accept';
+                        if (declineBtn) { declineBtn.disabled = false; }
+                        document.getElementById('friendRequestStatus').textContent = message.message;
+                    }
                 }
-                if (message.status === 'accepted') {
-                    button.textContent = 'Accepted';
-                    document.getElementById('friendRequestStatus').textContent =
-                        'Friend request accepted.';
-                } else {
-                    button.disabled = false;
-                    button.textContent = 'Accept';
-                    document.getElementById('friendRequestStatus').textContent = message.message;
+            } else if (message.type === 'friend.declineResult') {
+                const button = friendDeclineButtons.get(message.requestId);
+                const acceptBtn = friendAcceptButtons.get(message.requestId);
+                if (button) {
+                    if (message.status === 'declined') {
+                        button.textContent = 'Declined';
+                        if (acceptBtn) { acceptBtn.remove(); }
+                        document.getElementById('friendRequestStatus').textContent =
+                            'Friend request declined.';
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Decline';
+                        if (acceptBtn) { acceptBtn.disabled = false; }
+                        document.getElementById('friendRequestStatus').textContent = message.message;
+                    }
+                }
+            } else if (message.type === 'friend.removeResult') {
+                const button = friendRemoveButtons.get(message.githubId);
+                if (button) {
+                    if (message.status === 'removed') {
+                        button.textContent = 'Removed';
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Remove';
+                        document.getElementById('friendListStatus').textContent = message.message;
+                    }
                 }
             } else if (message.type === 'friend.requestResult') {
+                if (message.status === 'error') {
+                    const searchStatus = document.getElementById('githubSearchStatus');
+                    if (searchStatus && !document.getElementById('githubSearchResult').hidden) {
+                        searchStatus.textContent = message.message;
+                    }
+                }
                 const button = rowButtons.get(message.githubId);
                 if (button) {
                     if (message.status === 'sent') {
-                        button.textContent = 'Request sent';
+                        button.textContent = 'Cancel request';
                         button.className = 'btn btn-secondary';
+                        button.disabled = false;
+                        button.onclick = () => {
+                            button.disabled = true;
+                            button.textContent = 'Cancelling…';
+                            vscode?.postMessage({ type: 'friend.cancel', githubId: message.githubId });
+                        };
                     } else {
                         button.disabled = false;
                         button.textContent = 'Send friend request';
+                        button.onclick = () => {
+                            button.disabled = true;
+                            button.textContent = 'Sending…';
+                            vscode?.postMessage({ type: 'friend.request', githubId: message.githubId });
+                        };
                     }
                 }
                 document.querySelectorAll('button[data-github-id]').forEach(searchButton => {
@@ -1829,11 +2224,72 @@ export class OpenDashboard {
                         return;
                     }
                     if (message.status === 'sent') {
-                        searchButton.textContent = 'Request sent';
+                        searchButton.textContent = 'Cancel request';
                         searchButton.className = 'btn btn-secondary search-profile-link';
+                        searchButton.disabled = false;
+                        searchButton.onclick = () => {
+                            searchButton.disabled = true;
+                            searchButton.textContent = 'Cancelling…';
+                            if (vscode) {
+                                vscode.postMessage({ type: 'friend.cancel', githubId: message.githubId });
+                            } else {
+                                searchButton.disabled = false;
+                                searchButton.textContent = 'Cancel request';
+                            }
+                        };
                     } else {
                         searchButton.disabled = false;
                         searchButton.textContent = 'Send friend request';
+                        searchButton.onclick = () => {
+                            searchButton.disabled = true;
+                            searchButton.textContent = 'Sending…';
+                            if (vscode) {
+                                vscode.postMessage({ type: 'friend.request', githubId: message.githubId });
+                            } else {
+                                searchButton.disabled = false;
+                                searchButton.textContent = 'Send friend request';
+                            }
+                        };
+                    }
+                });
+            } else if (message.type === 'friend.cancelResult') {
+                const button = rowButtons.get(message.githubId);
+                if (button) {
+                    if (message.status === 'cancelled') {
+                        button.textContent = 'Send friend request';
+                        button.className = 'btn btn-primary';
+                        button.disabled = false;
+                        button.onclick = () => {
+                            button.disabled = true;
+                            button.textContent = 'Sending…';
+                            vscode?.postMessage({ type: 'friend.request', githubId: message.githubId });
+                        };
+                    } else {
+                        button.disabled = false;
+                        button.textContent = 'Cancel request';
+                    }
+                }
+                document.querySelectorAll('button[data-github-id]').forEach(searchButton => {
+                    if (searchButton.dataset.githubId !== String(message.githubId)) {
+                        return;
+                    }
+                    if (message.status === 'cancelled') {
+                        searchButton.textContent = 'Send friend request';
+                        searchButton.className = 'btn btn-secondary search-profile-link';
+                        searchButton.disabled = false;
+                        searchButton.onclick = () => {
+                            searchButton.disabled = true;
+                            searchButton.textContent = 'Sending…';
+                            if (vscode) {
+                                vscode.postMessage({ type: 'friend.request', githubId: message.githubId });
+                            } else {
+                                searchButton.disabled = false;
+                                searchButton.textContent = 'Send friend request';
+                            }
+                        };
+                    } else {
+                        searchButton.disabled = false;
+                        searchButton.textContent = 'Cancel request';
                     }
                 });
             }

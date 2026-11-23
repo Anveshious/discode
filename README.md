@@ -43,7 +43,9 @@ Discode will use GitHub's supported APIs for public user search and profile look
 
 ### 3. Friends and Connections
 
-- Send friend requests to registered Discode users and accept incoming requests.
+- Send friend requests to registered Discode users, accept or decline incoming requests, cancel outgoing requests, and remove existing friends.
+- Prevent duplicate and self-directed friend requests as well as requests between existing friends in both the API and dashboard UI.
+- Display incoming friend requests with sender details, avatars, and pending count in the dashboard.
 - Maintain an accepted-friends list inside the Discode dashboard.
 - Show each accepted friend's current status, including online and offline.
 
@@ -78,8 +80,9 @@ Privacy is a core requirement: Discode should not share source code, full local 
 
 ### 6. VS Code Notifications
 
-Native VS Code notifications are planned for relevant friend activity, such as:
+Discode alerts developers with native VS Code notifications for social interactions:
 
+- Incoming friend request notifications with an "Open Dashboard" quick action.
 - A friend coming online.
 - A friend becoming available to contribute.
 - A relevant presence change.
@@ -121,8 +124,14 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Initial presence-status definitions, including Online, Idle, Focused and Open to Contribute.
 - [x] Local presence tracking groundwork.
 - [x] Backend friend requests, acceptance, and accepted-friend listing.
+- [x] Accept and decline incoming friend requests with real-time UI updates.
+- [x] Cancel outgoing friend requests before acceptance.
+- [x] Prevent duplicate and self-directed friend requests with helpful user feedback.
+- [x] Prevent friend requests between existing friends in search and connection views.
+- [x] Friend request notifications with quick action to open the dashboard.
 - [x] Publish presence with a 30-second heartbeat and expire stale presence after 90 seconds.
-- [x] Show accepted friends and incoming requests in the dashboard.
+- [x] Show accepted friends and incoming requests in the dashboard with requester avatars and profile links.
+- [x] Remove existing friends with instant UI updates and backend synchronization.
 
 ### In Progress / Needs Integration
 

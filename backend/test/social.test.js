@@ -134,6 +134,24 @@ test("rejects friend requests to the same user", async () => {
   assert.equal(lookupCount, 1);
 });
 
+test("rejects self-directed friend requests when recipient user ID matches caller", async () => {
+  const response = await requestSocial({
+    pool: createPool(async (sql, values) => {
+      if (/SELECT id FROM users WHERE github_id/.test(sql)) {
+        assert.deepEqual(values, ["999999"]);
+        return { rows: [{ id: "self-user-id" }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    }),
+    path: "/friend-requests",
+    method: "POST",
+    body: { githubId: "999999" },
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "self_friend_request" });
+});
+
 test("returns not found when the requested GitHub ID is not registered", async () => {
   const response = await requestSocial({
     pool: createPool(async (_sql, values) => {
@@ -166,6 +184,31 @@ test("rejects duplicate friend requests", async () => {
 
   assert.equal(response.status, 409);
   assert.deepEqual(await response.json(), { error: "friend_request_exists" });
+});
+
+test("rejects friend requests between existing friends", async () => {
+  const response = await requestSocial({
+    pool: createPool(async (sql) => {
+      if (/SELECT id FROM users WHERE github_id/.test(sql)) {
+        return { rows: [{ id: "friend-user-id" }] };
+      }
+      if (/INSERT INTO friendships/.test(sql)) {
+        const error = new Error("duplicate friendship");
+        error.code = "23505";
+        throw error;
+      }
+      if (/SELECT status FROM friendships/.test(sql)) {
+        return { rows: [{ status: "accepted" }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    }),
+    path: "/friend-requests",
+    method: "POST",
+    body: { githubId: "123456" },
+  });
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: "already_friends" });
 });
 
 test("accepts an incoming request and lists accepted friends with their presence", async () => {
@@ -212,6 +255,96 @@ test("accepts an incoming request and lists accepted friends with their presence
       status: "offline",
     }],
   });
+});
+
+test("declines an incoming request", async () => {
+  const requestId = "18af41e0-f890-4f4e-9e90-d5de16dfdf67";
+  const response = await requestSocial({
+    pool: createPool(async (sql, values) => {
+      assert.match(sql, /DELETE FROM friendships/);
+      assert.deepEqual(values, [requestId, "self-user-id"]);
+      return { rows: [{ id: requestId }] };
+    }),
+    path: `/friend-requests/${requestId}/decline`,
+    method: "POST",
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "declined" });
+});
+
+test("removes an accepted friend by github ID", async () => {
+  const friendGithubId = "123456";
+  const response = await requestSocial({
+    pool: createPool(async (sql, values) => {
+      if (sql === "SELECT id FROM users WHERE github_id = $1") {
+        assert.deepEqual(values, [friendGithubId]);
+        return { rows: [{ id: "friend-user-id" }] };
+      }
+      assert.match(sql, /DELETE FROM friendships/);
+      assert.match(sql, /status = 'accepted'/);
+      assert.deepEqual(values, ["self-user-id", "friend-user-id"]);
+      return { rows: [{ id: "friendship-1" }] };
+    }),
+    path: `/friends/${friendGithubId}`,
+    method: "DELETE",
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "removed" });
+});
+
+test("returns 404 when removing a friend who is not an accepted friend", async () => {
+  const friendGithubId = "123456";
+  const response = await requestSocial({
+    pool: createPool(async (sql) => {
+      if (/SELECT id FROM users WHERE github_id/.test(sql)) {
+        return { rows: [{ id: "friend-user-id" }] };
+      }
+      return { rows: [] };
+    }),
+    path: `/friends/${friendGithubId}`,
+    method: "DELETE",
+  });
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: "friend_not_found" });
+});
+
+test("cancels an outgoing request by recipient github ID", async () => {
+  const recipientGithubId = "123456";
+  const response = await requestSocial({
+    pool: createPool(async (sql, values) => {
+      if (sql === "SELECT id FROM users WHERE github_id = $1") {
+        assert.deepEqual(values, [recipientGithubId]);
+        return { rows: [{ id: "recipient-user-id" }] };
+      }
+      assert.match(sql, /DELETE FROM friendships/);
+      assert.deepEqual(values, ["self-user-id", "recipient-user-id"]);
+      return { rows: [{ id: "req-1" }] };
+    }),
+    path: `/friend-requests/outgoing/${recipientGithubId}`,
+    method: "DELETE",
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "cancelled" });
+});
+
+test("cancels an outgoing request by request ID", async () => {
+  const requestId = "18af41e0-f890-4f4e-9e90-d5de16dfdf67";
+  const response = await requestSocial({
+    pool: createPool(async (sql, values) => {
+      assert.match(sql, /DELETE FROM friendships/);
+      assert.deepEqual(values, [requestId, "self-user-id"]);
+      return { rows: [{ id: requestId }] };
+    }),
+    path: `/friend-requests/${requestId}`,
+    method: "DELETE",
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "cancelled" });
 });
 
 test("lists incoming friend requests for the authenticated user", async () => {

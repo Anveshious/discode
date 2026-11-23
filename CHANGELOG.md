@@ -16,6 +16,14 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `CHANGELOG.md`, `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/commands/CommandManager.ts`, and 7 more
+- Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/services/DiscodeService.ts`, `src/test/discodeService.test.ts`, and 1 more
+- Staged paths: `README.md`, `src/commands/CommandManager.ts`, `src/core/ExtensionController.ts`, `src/services/FriendRequestNotifier.ts`, `src/services/PresenceSync.ts`, and 2 more
+- Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/webview/DashboardView.ts`
+- Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/webview/DashboardView.ts`
+- Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/services/DiscodeService.ts`, `src/webview/DashboardView.ts`
+- Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/services/DiscodeService.ts`, `src/webview/DashboardView.ts`
+- Staged paths: `README.md`, `src/webview/DashboardView.ts`
 - Staged paths: `src/webview/DashboardView.ts`
 - Staged paths: `src/webview/DashboardView.ts`
 - Staged paths: `backend/src/app.js`, `backend/src/db/migrations/002_create_invitations.sql`, `backend/src/db/migrations/005_create_friend_requests.sql`, `backend/src/routes/auth.js`, `backend/src/routes/friendRequests.js`, and 2 more

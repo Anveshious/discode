@@ -297,6 +297,7 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
       return;
     }
 
+    let recipientId;
     try {
       const recipient = await pool.query(
         "SELECT id FROM users WHERE github_id = $1",
@@ -307,7 +308,12 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
         return;
       }
 
-      const recipientId = recipient.rows[0].id;
+      recipientId = recipient.rows[0].id;
+      if (recipientId === request.discodeUserId) {
+        response.status(400).json({ error: "self_friend_request" });
+        return;
+      }
+
       await pool.query(
         `INSERT INTO friendships (
            user_a_id, user_b_id, requested_by_id
@@ -322,6 +328,22 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
       response.status(201).json({ status: "pending" });
     } catch (error) {
       if (error.code === "23505") {
+        try {
+          if (recipientId) {
+            const existing = await pool.query(
+              `SELECT status FROM friendships
+               WHERE user_a_id = LEAST($1::uuid, $2::uuid)
+                 AND user_b_id = GREATEST($1::uuid, $2::uuid)`,
+              [request.discodeUserId, recipientId]
+            );
+            if (existing.rows[0]?.status === "accepted") {
+              response.status(409).json({ error: "already_friends" });
+              return;
+            }
+          }
+        } catch {
+          // Fall back to friend_request_exists on duplicate constraint error
+        }
         response.status(409).json({ error: "friend_request_exists" });
         return;
       }
@@ -355,6 +377,130 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
     } catch (error) {
       console.error("Failed to accept a friend request.", error);
       response.status(500).json({ error: "friend_request_accept_failed" });
+    }
+  });
+
+  router.post("/friend-requests/:id/decline", authenticate, async (request, response) => {
+    if (!isUuid(request.params.id)) {
+      response.status(400).json({ error: "invalid_friend_request_id" });
+      return;
+    }
+
+    try {
+      const result = await pool.query(
+        `DELETE FROM friendships
+         WHERE id = $1
+           AND status = 'pending'
+           AND requested_by_id <> $2
+           AND $2 IN (user_a_id, user_b_id)
+         RETURNING id`,
+        [request.params.id, request.discodeUserId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_request_not_found" });
+        return;
+      }
+      response.json({ status: "declined" });
+    } catch (error) {
+      console.error("Failed to decline a friend request.", error);
+      response.status(500).json({ error: "friend_request_decline_failed" });
+    }
+  });
+
+  router.delete("/friend-requests/outgoing/:githubId", authenticate, async (request, response) => {
+    const githubId = request.params.githubId;
+    if (!isGitHubId(githubId)) {
+      response.status(400).json({ error: "invalid_github_id" });
+      return;
+    }
+    const normalizedGithubId = BigInt(githubId).toString();
+    try {
+      const recipient = await pool.query(
+        "SELECT id FROM users WHERE github_id = $1",
+        [normalizedGithubId]
+      );
+      if (recipient.rows.length === 0) {
+        response.status(404).json({ error: "discode_user_not_found" });
+        return;
+      }
+      const recipientId = recipient.rows[0].id;
+      const result = await pool.query(
+        `DELETE FROM friendships
+         WHERE status = 'pending'
+           AND requested_by_id = $1
+           AND $2 IN (user_a_id, user_b_id)
+         RETURNING id`,
+        [request.discodeUserId, recipientId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_request_not_found" });
+        return;
+      }
+      response.json({ status: "cancelled" });
+    } catch (error) {
+      console.error("Failed to cancel outgoing friend request.", error);
+      response.status(500).json({ error: "cancel_friend_request_failed" });
+    }
+  });
+
+  router.delete("/friend-requests/:id", authenticate, async (request, response) => {
+    if (!isUuid(request.params.id)) {
+      response.status(400).json({ error: "invalid_friend_request_id" });
+      return;
+    }
+    try {
+      const result = await pool.query(
+        `DELETE FROM friendships
+         WHERE id = $1
+           AND status = 'pending'
+           AND requested_by_id = $2
+         RETURNING id`,
+        [request.params.id, request.discodeUserId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_request_not_found" });
+        return;
+      }
+      response.json({ status: "cancelled" });
+    } catch (error) {
+      console.error("Failed to cancel outgoing friend request.", error);
+      response.status(500).json({ error: "cancel_friend_request_failed" });
+    }
+  });
+
+  router.delete("/friends/:githubId", authenticate, async (request, response) => {
+    const githubId = request.params.githubId;
+    if (!isGitHubId(githubId)) {
+      response.status(400).json({ error: "invalid_github_id" });
+      return;
+    }
+    const normalizedGithubId = BigInt(githubId).toString();
+    try {
+      const friend = await pool.query(
+        "SELECT id FROM users WHERE github_id = $1",
+        [normalizedGithubId]
+      );
+      if (friend.rows.length === 0) {
+        response.status(404).json({ error: "discode_user_not_found" });
+        return;
+      }
+      const friendId = friend.rows[0].id;
+      const result = await pool.query(
+        `DELETE FROM friendships
+         WHERE status = 'accepted'
+           AND user_a_id = LEAST($1::uuid, $2::uuid)
+           AND user_b_id = GREATEST($1::uuid, $2::uuid)
+         RETURNING id`,
+        [request.discodeUserId, friendId]
+      );
+      if (result.rows.length === 0) {
+        response.status(404).json({ error: "friend_not_found" });
+        return;
+      }
+      response.json({ status: "removed" });
+    } catch (error) {
+      console.error("Failed to remove friend.", error);
+      response.status(500).json({ error: "remove_friend_failed" });
     }
   });
 
