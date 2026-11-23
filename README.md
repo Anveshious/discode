@@ -58,7 +58,7 @@ Discode is intended to support the following statuses:
 | Status | Meaning |
 |---|---|
 | Online | Available and active in VS Code |
-| Idle | Inactive for a configurable period |
+| Idle | Inactive for a configurable period (`discode.idleTimeoutMinutes`) |
 | Focused | Deep work; prefers fewer interruptions |
 | Open to Contribute | Available for collaboration |
 | Offline | Not connected to Discode |
@@ -118,7 +118,7 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Expired-session handling that signs the user out and requests reauthentication.
 - [x] Reusable Discode dashboard opened through `discode.openDashboard`.
 - [x] Status bar presence item.
-- [x] Detect active editor usage, inactivity-to-Idle transitions, and VS Code focus loss.
+- [x] Detect active editor usage, inactivity-to-Idle transitions, and VS Code focus loss with configurable timeout (`discode.idleTimeoutMinutes`).
 - [x] Manual Focused and Open to Contribute overrides, stored separately from automatic activity.
 - [x] Modular extension structure separating authentication, commands, services, models and UI.
 - [x] Initial presence-status definitions, including Online, Idle, Focused and Open to Contribute.

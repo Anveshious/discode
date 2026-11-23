@@ -7,6 +7,17 @@ import { PresenceSync } from "../services/PresenceSync";
 import { FriendRequestNotifier } from "../services/FriendRequestNotifier";
 import { PresenceTracker } from "../presence/presenceTracker";
 
+function getIdleThresholdMs(): number {
+    const minutes = vscode.workspace.getConfiguration("discode").get<number>(
+        "idleTimeoutMinutes",
+        5
+    );
+    if (typeof minutes === "number" && Number.isFinite(minutes) && minutes >= 1) {
+        return Math.floor(minutes * 60 * 1000);
+    }
+    return 5 * 60 * 1000;
+}
+
 export class ExtensionController implements vscode.Disposable {
     private statusBar: StatusBarManager;
     private commandManager: CommandManager;
@@ -17,6 +28,7 @@ export class ExtensionController implements vscode.Disposable {
     private presenceTracker?: PresenceTracker;
     private readonly authStateSubscription: vscode.Disposable;
     private readonly presenceSubscription: vscode.Disposable;
+    private readonly configurationSubscription: vscode.Disposable;
     private activitySubscription?: vscode.Disposable;
 
     constructor(context: vscode.ExtensionContext) {
@@ -41,6 +53,11 @@ export class ExtensionController implements vscode.Disposable {
         this.presenceSubscription = this.presenceManager.onDidChangeStatus(
             () => this.updateStatusBar()
         );
+        this.configurationSubscription = vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration("discode.idleTimeoutMinutes")) {
+                this.presenceTracker?.setIdleThresholdMs(getIdleThresholdMs());
+            }
+        });
     }
 
     public async initialize(): Promise<void> {
@@ -53,7 +70,7 @@ export class ExtensionController implements vscode.Disposable {
             return;
         }
 
-        this.presenceTracker = new PresenceTracker();
+        this.presenceTracker = new PresenceTracker(getIdleThresholdMs());
         this.activitySubscription = this.presenceTracker.onDidChangePresence(
             (presence) => this.presenceManager.setActivity(presence.status)
         );
@@ -76,6 +93,7 @@ export class ExtensionController implements vscode.Disposable {
         this.activitySubscription?.dispose();
         this.authStateSubscription.dispose();
         this.presenceSubscription.dispose();
+        this.configurationSubscription.dispose();
         this.commandManager.dispose();
         this.statusBar.dispose();
         this.authManager.dispose();

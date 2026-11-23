@@ -61,6 +61,26 @@ suite('PresenceTracker Test Suite', () => {
 		}
 	});
 
+	test('updates idle threshold dynamically via setIdleThresholdMs', async () => {
+		const doc = await vscode.workspace.openTextDocument({
+			content: 'const testing = 123;',
+			language: 'typescript',
+		});
+		await vscode.window.showTextDocument(doc);
+		const tracker = new PresenceTracker(5000);
+
+		try {
+			assert.strictEqual(tracker.getIdleThresholdMs(), 5000);
+			tracker.setIdleThresholdMs(25);
+			assert.strictEqual(tracker.getIdleThresholdMs(), 25);
+
+			await new Promise((resolve) => setTimeout(resolve, 45));
+			assert.strictEqual(tracker.getCurrentPresence().status, 'idle');
+		} finally {
+			tracker.dispose();
+		}
+	});
+
 	test('publishes offline when disposed and clears pending activity', async () => {
 		const doc = await vscode.workspace.openTextDocument({
 			content: 'const stopping = true;',

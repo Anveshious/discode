@@ -12,7 +12,7 @@ export class PresenceTracker implements vscode.Disposable {
 
     private current: PresenceStatus;
     private idleTimer?: NodeJS.Timeout;
-    private readonly idleThresholdMs: number;
+    private idleThresholdMs: number;
     private disposed = false;
 
     constructor(idleThresholdMs: number = DEFAULT_IDLE_THRESHOLD_MS) {
@@ -40,6 +40,20 @@ export class PresenceTracker implements vscode.Disposable {
 
     public getCurrentPresence(): PresenceStatus {
         return this.current;
+    }
+
+    public setIdleThresholdMs(thresholdMs: number): void {
+        if (!Number.isFinite(thresholdMs) || thresholdMs <= 0 || thresholdMs === this.idleThresholdMs) {
+            return;
+        }
+        this.idleThresholdMs = thresholdMs;
+        if (this.current.isWindowFocused && this.current.status === "active") {
+            this.scheduleIdle();
+        }
+    }
+
+    public getIdleThresholdMs(): number {
+        return this.idleThresholdMs;
     }
 
     private handleWindowStateChange(state: vscode.WindowState): void {
