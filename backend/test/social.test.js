@@ -257,6 +257,51 @@ test("accepts an incoming request and lists accepted friends with their presence
   });
 });
 
+test("lists accepted friends ordered with active presence before offline friends", async () => {
+  const friendsResponse = await requestSocial({
+    pool: createPool(async (sql) => {
+      assert.match(sql, /ORDER BY/i);
+      assert.match(sql, /presence\.status <> 'offline'/i);
+      return {
+        rows: [
+          {
+            github_id: "111",
+            username: "active_coder",
+            name: "Active Coder",
+            avatar_url: "https://avatars.githubusercontent.com/u/111",
+            profile_url: "https://github.com/active_coder",
+            status: "online",
+          },
+          {
+            github_id: "222",
+            username: "idle_coder",
+            name: "Idle Coder",
+            avatar_url: "https://avatars.githubusercontent.com/u/222",
+            profile_url: "https://github.com/idle_coder",
+            status: "idle",
+          },
+          {
+            github_id: "333",
+            username: "offline_coder",
+            name: "Offline Coder",
+            avatar_url: "https://avatars.githubusercontent.com/u/333",
+            profile_url: "https://github.com/offline_coder",
+            status: "offline",
+          },
+        ],
+      };
+    }),
+    path: "/friends",
+  });
+
+  assert.equal(friendsResponse.status, 200);
+  const data = await friendsResponse.json();
+  assert.equal(data.friends.length, 3);
+  assert.equal(data.friends[0].status, "online");
+  assert.equal(data.friends[1].status, "idle");
+  assert.equal(data.friends[2].status, "offline");
+});
+
 test("declines an incoming request", async () => {
   const requestId = "18af41e0-f890-4f4e-9e90-d5de16dfdf67";
   const response = await requestSocial({

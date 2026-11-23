@@ -47,7 +47,8 @@ Discode will use GitHub's supported APIs for public user search and profile look
 - Prevent duplicate and self-directed friend requests as well as requests between existing friends in both the API and dashboard UI.
 - Display incoming friend requests with sender details, avatars, and pending count in the dashboard.
 - Maintain an accepted-friends list inside the Discode dashboard.
-- Show each accepted friend's current status, including online and offline.
+- Display online and active friends (`online`, `focused`, `open-to-contribute`, `idle`) prioritized before offline friends, styled with status-colored presence dots and accessible labels.
+- Show each accepted friend's current status, including online and offline counters.
 
 Friend relationships will be managed by Discode rather than inferred from GitHub followers.
 

@@ -1277,6 +1277,15 @@ export class OpenDashboard {
             color: var(--dc-muted);
         }
 
+        .presence-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--dot);
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
         .friend-request-actions {
             display: inline-flex;
             gap: var(--space-1);
@@ -1888,6 +1897,8 @@ export class OpenDashboard {
         function createFriendRow(friend) {
             const row = document.createElement('div');
             row.className = 'friend-row';
+            row.dataset.presence = friend.status;
+            row.setAttribute('aria-label', '@' + friend.username + ' (' + labelFor(friend.status) + ')');
 
             try {
                 const avatarUrl = new URL(friend.avatarUrl);
@@ -2011,7 +2022,22 @@ export class OpenDashboard {
         function renderSocialState(friends, requests) {
             const friendList = document.getElementById('friendList');
             const requestList = document.getElementById('friendRequestList');
-            friendList.replaceChildren(...friends.map(createFriendRow));
+            const statusPriority = {
+                'online': 1,
+                'focused': 2,
+                'open-to-contribute': 3,
+                'idle': 4,
+                'offline': 5
+            };
+            const sortedFriends = [...friends].sort((a, b) => {
+                const prioA = statusPriority[a.status] || 5;
+                const prioB = statusPriority[b.status] || 5;
+                if (prioA !== prioB) {
+                    return prioA - prioB;
+                }
+                return (a.username || '').localeCompare(b.username || '');
+            });
+            friendList.replaceChildren(...sortedFriends.map(createFriendRow));
             requestList.replaceChildren(...requests.map(createFriendRequestRow));
             currentFriendGithubIds.clear();
             friends.forEach(friend => currentFriendGithubIds.add(String(friend.githubId)));

@@ -234,7 +234,21 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
          LEFT JOIN user_presence presence ON presence.user_id = friend.id
          WHERE $1 IN (friendship.user_a_id, friendship.user_b_id)
            AND friendship.status = 'accepted'
-         ORDER BY lower(friend.username)`,
+         ORDER BY
+           CASE
+             WHEN presence.status IS NOT NULL
+               AND presence.status <> 'offline'
+               AND presence.updated_at >= now() - interval '90 seconds'
+             THEN CASE presence.status
+               WHEN 'online' THEN 1
+               WHEN 'focused' THEN 2
+               WHEN 'open-to-contribute' THEN 3
+               WHEN 'idle' THEN 4
+               ELSE 5
+             END
+             ELSE 6
+           END,
+           lower(friend.username)`,
         [request.discodeUserId]
       );
 
