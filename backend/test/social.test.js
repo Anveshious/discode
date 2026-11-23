@@ -186,6 +186,31 @@ test("rejects duplicate friend requests", async () => {
   assert.deepEqual(await response.json(), { error: "friend_request_exists" });
 });
 
+test("rejects friend requests between existing friends", async () => {
+  const response = await requestSocial({
+    pool: createPool(async (sql) => {
+      if (/SELECT id FROM users WHERE github_id/.test(sql)) {
+        return { rows: [{ id: "friend-user-id" }] };
+      }
+      if (/INSERT INTO friendships/.test(sql)) {
+        const error = new Error("duplicate friendship");
+        error.code = "23505";
+        throw error;
+      }
+      if (/SELECT status FROM friendships/.test(sql)) {
+        return { rows: [{ status: "accepted" }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    }),
+    path: "/friend-requests",
+    method: "POST",
+    body: { githubId: "123456" },
+  });
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: "already_friends" });
+});
+
 test("accepts an incoming request and lists accepted friends with their presence", async () => {
   const requestId = "18af41e0-f890-4f4e-9e90-d5de16dfdf67";
   const response = await requestSocial({

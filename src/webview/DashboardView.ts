@@ -36,6 +36,7 @@ export class OpenDashboard {
     private latestSearchRequestId = 0;
     private socialRefreshInterval?: NodeJS.Timeout;
     private currentGithubId?: string;
+    private currentFriendGithubIds = new Set<string>();
     private readonly discodeService: DiscodeService;
     private readonly githubService: GitHubService;
 
@@ -238,6 +239,7 @@ export class OpenDashboard {
             ) {
                 return;
             }
+            this.currentFriendGithubIds = new Set(friends.map((friend) => String(friend.githubId)));
             await panel.webview.postMessage({
                 type: "social.state",
                 friends,
@@ -282,6 +284,18 @@ export class OpenDashboard {
 
         if (this.currentGithubId && this.currentGithubId === normalizedGithubId) {
             const message = "You cannot send a friend request to yourself.";
+            await panel.webview.postMessage({
+                type: "friend.requestResult",
+                githubId: String(githubId),
+                status: "error",
+                message,
+            });
+            await vscode.window.showErrorMessage(message);
+            return;
+        }
+
+        if (this.currentFriendGithubIds.has(normalizedGithubId)) {
+            const message = "You are already friends with this user.";
             await panel.webview.postMessage({
                 type: "friend.requestResult",
                 githubId: String(githubId),
@@ -454,6 +468,7 @@ export class OpenDashboard {
 
         if (!session) {
             this.currentGithubId = undefined;
+            this.currentFriendGithubIds.clear();
             return;
         }
 
@@ -1599,6 +1614,7 @@ export class OpenDashboard {
         const rowButtons = new Map();
         const AVATAR_PREFIX = 'https://avatars.githubusercontent.com/';
         const LABELS = { sent: 'Request sent', received: 'Request received', friends: 'Friends' };
+        const currentFriendGithubIds = new Set();
 
         function showView(name) {
             VIEWS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== name));
@@ -1766,6 +1782,13 @@ export class OpenDashboard {
                     selfLabel.className = 'search-profile-link';
                     selfLabel.textContent = 'You';
                     profile.append(avatar, details, selfLabel);
+                } else if (currentFriendGithubIds.has(String(user.id))) {
+                    const button = document.createElement('button');
+                    button.className = 'btn btn-secondary search-profile-link';
+                    button.type = 'button';
+                    button.disabled = true;
+                    button.textContent = 'Friends';
+                    profile.append(avatar, details, button);
                 } else if (user.isRegistered) {
                     const button = document.createElement('button');
                     button.className = 'btn btn-secondary search-profile-link';
@@ -1924,6 +1947,8 @@ export class OpenDashboard {
             const requestList = document.getElementById('friendRequestList');
             friendList.replaceChildren(...friends.map(createFriendRow));
             requestList.replaceChildren(...requests.map(createFriendRequestRow));
+            currentFriendGithubIds.clear();
+            friends.forEach(friend => currentFriendGithubIds.add(String(friend.githubId)));
 
             const onlineCount = friends.filter(friend => friend.status !== 'offline').length;
             document.getElementById('friendsOnlineCount').textContent = String(onlineCount);
@@ -1945,6 +1970,7 @@ export class OpenDashboard {
         }
 
         function resetSocialState() {
+            currentFriendGithubIds.clear();
             renderSocialState([], []);
             document.getElementById('friendListStatus').textContent = 'Sign in to see your friends.';
             document.getElementById('friendListEmpty').classList.add('hidden');
