@@ -27,6 +27,13 @@
           "type": "string",
           "default": "http://localhost:8000",
           "description": "Discode backend base URL. HTTPS is required except for localhost."
+        },
+        "discode.heartbeatIntervalSeconds": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Interval in seconds between presence heartbeat pulses sent to the Discode backend."
         }
       }
     }

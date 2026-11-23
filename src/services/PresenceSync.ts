@@ -6,8 +6,18 @@ import { FriendRequestNotifier } from "./FriendRequestNotifier";
 
 const PRESENCE_HEARTBEAT_MS = 30_000;
 
+function getHeartbeatIntervalMs(): number {
+    const seconds = vscode.workspace.getConfiguration("discode").get<number>(
+        "heartbeatIntervalSeconds",
+        30
+    );
+    if (typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 5) {
+        return Math.floor(seconds * 1000);
+    }
+    return PRESENCE_HEARTBEAT_MS;
+}
+
 export class PresenceSync implements vscode.Disposable {
-    private readonly discodeService: DiscodeService;
     private readonly subscriptions: vscode.Disposable[];
     private heartbeat?: NodeJS.Timeout;
     private sessionKey?: string;
@@ -17,9 +27,10 @@ export class PresenceSync implements vscode.Disposable {
     constructor(
         private readonly authManager: AuthManager,
         private readonly presenceManager: PresenceManager,
-        private readonly friendRequestNotifier: FriendRequestNotifier = new FriendRequestNotifier()
+        private readonly friendRequestNotifier: FriendRequestNotifier = new FriendRequestNotifier(),
+        private readonly discodeService: DiscodeService = new DiscodeService(authManager),
+        private readonly heartbeatIntervalMs: number = getHeartbeatIntervalMs()
     ) {
-        this.discodeService = new DiscodeService(authManager);
         this.subscriptions = [
             authManager.onDidChangeAuthentication(() => this.synchronizeSession()),
             presenceManager.onDidChangeStatus(() => this.publishPresence()),
@@ -62,7 +73,7 @@ export class PresenceSync implements vscode.Disposable {
             }
             this.heartbeat = setInterval(() => {
                 void this.publishPresence(sessionKey);
-            }, PRESENCE_HEARTBEAT_MS);
+            }, this.heartbeatIntervalMs);
         } catch (error) {
             if (sessionKey !== this.sessionKey) {
                 return;
@@ -72,7 +83,7 @@ export class PresenceSync implements vscode.Disposable {
             this.heartbeat = setInterval(() => {
                 this.stopHeartbeat();
                 void this.initializeSession(sessionKey);
-            }, PRESENCE_HEARTBEAT_MS);
+            }, this.heartbeatIntervalMs);
         }
     }
 

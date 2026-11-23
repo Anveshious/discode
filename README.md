@@ -64,7 +64,7 @@ Discode is intended to support the following statuses:
 | Offline | Not connected to Discode |
 
 Users should be able to select a status manually, while automatic activity detection provides supporting presence information. Manual status and connection state remain distinct. The extension publishes a
-presence heartbeat every 30 seconds; friends are shown as offline when their
+configurable presence heartbeat (defaulting to every 30 seconds via `discode.heartbeatIntervalSeconds`); friends are shown as offline when their
 last update is more than 90 seconds old.
 
 ### 5. Coding Activity
@@ -129,7 +129,7 @@ The project is currently an early-stage VS Code extension prototype.
 - [x] Prevent duplicate and self-directed friend requests with helpful user feedback.
 - [x] Prevent friend requests between existing friends in search and connection views.
 - [x] Friend request notifications with quick action to open the dashboard.
-- [x] Publish presence with a 30-second heartbeat and expire stale presence after 90 seconds.
+- [x] Publish presence with a configurable heartbeat interval (`discode.heartbeatIntervalSeconds`) and expire stale presence after 90 seconds.
 - [x] Show accepted friends and incoming requests in the dashboard with requester avatars and profile links.
 - [x] Remove existing friends with instant UI updates and backend synchronization.
 

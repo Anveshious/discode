@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `README.md`, `package.json`, `src/services/PresenceSync.ts`, `src/test/presenceSync.test.ts`
 - Staged paths: `CHANGELOG.md`, `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/commands/CommandManager.ts`, and 7 more
 - Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/services/DiscodeService.ts`, `src/test/discodeService.test.ts`, and 1 more
 - Staged paths: `README.md`, `src/commands/CommandManager.ts`, `src/core/ExtensionController.ts`, `src/services/FriendRequestNotifier.ts`, `src/services/PresenceSync.ts`, and 2 more
