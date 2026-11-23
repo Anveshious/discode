@@ -308,6 +308,11 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
       }
 
       const recipientId = recipient.rows[0].id;
+      if (recipientId === request.discodeUserId) {
+        response.status(400).json({ error: "self_friend_request" });
+        return;
+      }
+
       await pool.query(
         `INSERT INTO friendships (
            user_a_id, user_b_id, requested_by_id
@@ -322,6 +327,20 @@ export function createSocialRouter({ pool, fetchGitHubUser = fetch }) {
       response.status(201).json({ status: "pending" });
     } catch (error) {
       if (error.code === "23505") {
+        try {
+          const existing = await pool.query(
+            `SELECT status FROM friendships
+             WHERE user_a_id = LEAST($1::uuid, $2::uuid)
+               AND user_b_id = GREATEST($1::uuid, $2::uuid)`,
+            [request.discodeUserId, recipientId]
+          );
+          if (existing.rows[0]?.status === "accepted") {
+            response.status(409).json({ error: "already_friends" });
+            return;
+          }
+        } catch {
+          // Fall back to friend_request_exists on duplicate constraint error
+        }
         response.status(409).json({ error: "friend_request_exists" });
         return;
       }

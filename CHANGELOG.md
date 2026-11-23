@@ -16,6 +16,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Changed
 
+- Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/webview/DashboardView.ts`
 - Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/services/DiscodeService.ts`, `src/webview/DashboardView.ts`
 - Staged paths: `README.md`, `backend/src/routes/social.js`, `backend/test/social.test.js`, `src/services/DiscodeService.ts`, `src/webview/DashboardView.ts`
 - Staged paths: `README.md`, `src/webview/DashboardView.ts`

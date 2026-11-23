@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../auth/AuthManager";
+import { ApiError } from "../services/ApiService";
 import { DiscodeService } from "../services/DiscodeService";
 import { GitHubService } from "../services/GitHubService";
 import { ManualPresenceStatus } from "../models/PresenceStatus";
@@ -34,6 +35,7 @@ export class OpenDashboard {
     private panel?: vscode.WebviewPanel;
     private latestSearchRequestId = 0;
     private socialRefreshInterval?: NodeJS.Timeout;
+    private currentGithubId?: string;
     private readonly discodeService: DiscodeService;
     private readonly githubService: GitHubService;
 
@@ -273,6 +275,23 @@ export class OpenDashboard {
             return;
         }
 
+        const normalizedGithubId = typeof githubId === "number"
+            && Number.isSafeInteger(githubId)
+            ? String(githubId)
+            : String(githubId);
+
+        if (this.currentGithubId && this.currentGithubId === normalizedGithubId) {
+            const message = "You cannot send a friend request to yourself.";
+            await panel.webview.postMessage({
+                type: "friend.requestResult",
+                githubId: String(githubId),
+                status: "error",
+                message,
+            });
+            await vscode.window.showErrorMessage(message);
+            return;
+        }
+
         try {
             await this.discodeService.sendFriendRequest(githubId);
             await panel.webview.postMessage({
@@ -282,14 +301,27 @@ export class OpenDashboard {
             });
             await this.refreshSocialData(panel);
         } catch (error) {
+            let message = "Unable to send the friend request.";
+            if (error instanceof ApiError) {
+                if (error.code === "friend_request_exists") {
+                    message = "A friend request is already pending with this user.";
+                } else if (error.code === "self_friend_request") {
+                    message = "You cannot send a friend request to yourself.";
+                } else if (error.code === "already_friends") {
+                    message = "You are already friends with this user.";
+                } else {
+                    message = error.message;
+                }
+            } else if (error instanceof Error) {
+                message = error.message;
+            }
             await panel.webview.postMessage({
                 type: "friend.requestResult",
                 githubId: String(githubId),
                 status: "error",
-                message: error instanceof Error
-                    ? error.message
-                    : "Unable to send the friend request.",
+                message,
             });
+            await vscode.window.showErrorMessage(message);
         }
     }
 
@@ -421,6 +453,7 @@ export class OpenDashboard {
         });
 
         if (!session) {
+            this.currentGithubId = undefined;
             return;
         }
 
@@ -434,6 +467,7 @@ export class OpenDashboard {
                 return;
             }
 
+            this.currentGithubId = String(result.user.githubId);
             await panel.webview.postMessage({
                 type: "auth.profile",
                 user: result.user,
@@ -1647,6 +1681,14 @@ export class OpenDashboard {
             name.textContent = item.username;
             row.appendChild(name);
 
+            if (currentGithubId && String(item.githubId) === currentGithubId) {
+                const selfLabel = document.createElement('span');
+                selfLabel.className = 'search-profile-link';
+                selfLabel.textContent = 'You';
+                row.appendChild(selfLabel);
+                return row;
+            }
+
             const button = document.createElement('button');
             button.className = 'btn btn-primary';
             button.type = 'button';
@@ -1719,7 +1761,12 @@ export class OpenDashboard {
                     : 'Not on Discode';
                 details.append(username, membership);
 
-                if (user.isRegistered && String(user.id) !== currentGithubId) {
+                if (currentGithubId && String(user.id) === currentGithubId) {
+                    const selfLabel = document.createElement('span');
+                    selfLabel.className = 'search-profile-link';
+                    selfLabel.textContent = 'You';
+                    profile.append(avatar, details, selfLabel);
+                } else if (user.isRegistered) {
                     const button = document.createElement('button');
                     button.className = 'btn btn-secondary search-profile-link';
                     button.type = 'button';
@@ -1739,11 +1786,6 @@ export class OpenDashboard {
                         }
                     });
                     profile.append(avatar, details, button);
-                } else if (user.isRegistered) {
-                    const selfLabel = document.createElement('span');
-                    selfLabel.className = 'search-profile-link';
-                    selfLabel.textContent = 'You';
-                    profile.append(avatar, details, selfLabel);
                 } else {
                     const button = document.createElement('button');
                     button.className = 'btn btn-secondary search-profile-link';
@@ -2046,6 +2088,12 @@ export class OpenDashboard {
                     }
                 }
             } else if (message.type === 'friend.requestResult') {
+                if (message.status === 'error') {
+                    const searchStatus = document.getElementById('githubSearchStatus');
+                    if (searchStatus && !document.getElementById('githubSearchResult').hidden) {
+                        searchStatus.textContent = message.message;
+                    }
+                }
                 const button = rowButtons.get(message.githubId);
                 if (button) {
                     if (message.status === 'sent') {

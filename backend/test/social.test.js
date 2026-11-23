@@ -134,6 +134,24 @@ test("rejects friend requests to the same user", async () => {
   assert.equal(lookupCount, 1);
 });
 
+test("rejects self-directed friend requests when recipient user ID matches caller", async () => {
+  const response = await requestSocial({
+    pool: createPool(async (sql, values) => {
+      if (/SELECT id FROM users WHERE github_id/.test(sql)) {
+        assert.deepEqual(values, ["999999"]);
+        return { rows: [{ id: "self-user-id" }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    }),
+    path: "/friend-requests",
+    method: "POST",
+    body: { githubId: "999999" },
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "self_friend_request" });
+});
+
 test("returns not found when the requested GitHub ID is not registered", async () => {
   const response = await requestSocial({
     pool: createPool(async (_sql, values) => {
